@@ -6,6 +6,47 @@ document.addEventListener('DOMContentLoaded', function () {
   const dateInput = form.querySelector('input[name="fecha"]');
   const personCards = Array.from(form.querySelectorAll('.rae-person-card'));
   const noPersonalDate = form.querySelector('.rae-no-personal-date');
+  const prevButton = form.querySelector('.rae-carousel-prev');
+  const nextButton = form.querySelector('.rae-carousel-next');
+  let carouselPage = 0;
+
+  function getCardsPerPage() {
+    if (window.matchMedia('(max-width: 640px)').matches) return 1;
+    if (window.matchMedia('(max-width: 900px)').matches) return 2;
+
+    return 4;
+  }
+
+  function getVisibleCards() {
+    return personCards.filter(card => card.dataset.availableForDate !== 'false');
+  }
+
+  function updateCarousel() {
+    const visibleCards = getVisibleCards();
+    const cardsPerPage = getCardsPerPage();
+    const maxPage = Math.max(0, Math.ceil(visibleCards.length / cardsPerPage) - 1);
+    const shouldDisableArrows = visibleCards.length <= 4;
+
+    carouselPage = Math.min(carouselPage, maxPage);
+
+    personCards.forEach(card => {
+      card.hidden = true;
+    });
+
+    visibleCards.forEach((card, index) => {
+      const isOnPage = index >= carouselPage * cardsPerPage && index < (carouselPage + 1) * cardsPerPage;
+
+      card.hidden = !isOnPage;
+    });
+
+    if (prevButton) {
+      prevButton.disabled = shouldDisableArrows || carouselPage === 0;
+    }
+
+    if (nextButton) {
+      nextButton.disabled = shouldDisableArrows || carouselPage >= maxPage;
+    }
+  }
 
   function updateAvailableCards() {
     const selectedDate = dateInput ? dateInput.value : '';
@@ -23,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const isUnavailable = selectedDate && unavailableDates.includes(selectedDate);
 
-      card.hidden = isUnavailable;
+      card.dataset.availableForDate = isUnavailable ? 'false' : 'true';
 
       if (input) {
         input.disabled = isUnavailable;
@@ -41,12 +82,31 @@ document.addEventListener('DOMContentLoaded', function () {
     if (noPersonalDate) {
       noPersonalDate.hidden = visibleCards > 0;
     }
+
+    carouselPage = 0;
+    updateCarousel();
   }
 
   if (dateInput) {
     dateInput.addEventListener('change', updateAvailableCards);
     updateAvailableCards();
   }
+
+  if (prevButton) {
+    prevButton.addEventListener('click', function () {
+      carouselPage = Math.max(0, carouselPage - 1);
+      updateCarousel();
+    });
+  }
+
+  if (nextButton) {
+    nextButton.addEventListener('click', function () {
+      carouselPage += 1;
+      updateCarousel();
+    });
+  }
+
+  window.addEventListener('resize', updateCarousel);
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();

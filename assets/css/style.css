@@ -9,23 +9,55 @@
   max-width: 100%;
 }
 
-.rae-personal-grid {
+.rae-personal-carousel {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
   width: 100%;
   margin: 12px 0 20px;
+}
+
+.rae-personal-viewport {
+  overflow: hidden;
+  width: 100%;
+}
+
+.rae-personal-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.rae-carousel-arrow {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid #d6d6d6;
+  border-radius: 50%;
+  background: #fff;
+  color: #1f2937;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rae-carousel-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .rae-person-card {
   display: grid;
   gap: 10px;
   align-content: start;
-  min-height: 180px;
-  padding: 16px;
+  min-height: 220px;
+  padding: 12px;
   border: 1px solid #d6d6d6;
   border-radius: 8px;
   cursor: pointer;
+  text-align: center;
 }
 
 .rae-person-card:hover,
@@ -35,7 +67,7 @@
 
 .rae-person-photo {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   background: #f3f3f3;
 }
@@ -56,4 +88,26 @@
 
 .rae-no-personal-date {
   margin: 0 0 20px;
+}
+
+@media (max-width: 900px) {
+  .rae-personal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .rae-personal-carousel {
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+  }
+
+  .rae-personal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rae-carousel-arrow {
+    width: 36px;
+    height: 36px;
+    font-size: 26px;
+  }
 }

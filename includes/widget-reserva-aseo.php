@@ -43,35 +43,47 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
 
       <p><strong>Elige la persona para tu servicio:</strong></p>
 
-      <div class="rae-personal-grid">
-        <?php foreach ($personal as $persona): ?>
-          <?php
-          $fechas_no_disponibles = get_post_meta($persona->ID, '_rae_fechas_no_disponibles', true);
+      <div class="rae-personal-carousel">
+        <button type="button" class="rae-carousel-arrow rae-carousel-prev" aria-label="Ver personal anterior">
+          &#8249;
+        </button>
 
-          if (!is_array($fechas_no_disponibles)) {
-            $fechas_no_disponibles = [];
-          }
-          ?>
-
-          <label
-            class="rae-person-card"
-            data-unavailable-dates="<?php echo esc_attr(wp_json_encode(array_values($fechas_no_disponibles))); ?>"
-          >
-            <input type="radio" name="persona_id" value="<?php echo esc_attr($persona->ID); ?>" required>
-
-            <div class="rae-person-photo">
+        <div class="rae-personal-viewport">
+          <div class="rae-personal-grid">
+            <?php foreach ($personal as $persona): ?>
               <?php
-              if (has_post_thumbnail($persona->ID)) {
-                echo get_the_post_thumbnail($persona->ID, 'thumbnail');
-              } else {
-                echo '<div class="rae-no-photo">Sin foto</div>';
+              $fechas_no_disponibles = get_post_meta($persona->ID, '_rae_fechas_no_disponibles', true);
+
+              if (!is_array($fechas_no_disponibles)) {
+                $fechas_no_disponibles = [];
               }
               ?>
-            </div>
 
-            <span><?php echo esc_html($persona->post_title); ?></span>
-          </label>
-        <?php endforeach; ?>
+              <label
+                class="rae-person-card"
+                data-unavailable-dates="<?php echo esc_attr(wp_json_encode(array_values($fechas_no_disponibles))); ?>"
+              >
+                <input type="radio" name="persona_id" value="<?php echo esc_attr($persona->ID); ?>" required>
+
+                <div class="rae-person-photo">
+                  <?php
+                  if (has_post_thumbnail($persona->ID)) {
+                    echo get_the_post_thumbnail($persona->ID, 'thumbnail');
+                  } else {
+                    echo '<div class="rae-no-photo">Sin foto</div>';
+                  }
+                  ?>
+                </div>
+
+                <span><?php echo esc_html($persona->post_title); ?></span>
+              </label>
+            <?php endforeach; ?>
+          </div>
+        </div>
+
+        <button type="button" class="rae-carousel-arrow rae-carousel-next" aria-label="Ver personal siguiente">
+          &#8250;
+        </button>
       </div>
 
       <p class="rae-no-personal-date" hidden>No hay personal disponible para la fecha seleccionada.</p>
