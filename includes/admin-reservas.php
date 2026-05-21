@@ -29,23 +29,56 @@ add_action('admin_init', function () {
   global $wpdb;
 
   $table = $wpdb->prefix . 'reservas_aseo';
-  $reserva_id = intval($_GET['reserva_id']);
-  $accion = sanitize_text_field($_GET['rae_action']);
+  $reserva_id = absint(wp_unslash($_GET['reserva_id']));
+  $accion = sanitize_text_field(wp_unslash($_GET['rae_action']));
+  $nuevo_estado = '';
 
   if ($accion === 'confirmar') {
-    $wpdb->update(
-      $table,
-      ['estado' => 'confirmada'],
-      ['id' => $reserva_id]
-    );
+    $nuevo_estado = 'confirmada';
   }
 
   if ($accion === 'cancelar') {
-    $wpdb->update(
-      $table,
-      ['estado' => 'cancelada'],
-      ['id' => $reserva_id]
+    $nuevo_estado = 'cancelada';
+  }
+
+  if ($nuevo_estado) {
+    $actualizado = false;
+    $reserva = $wpdb->get_row(
+      $wpdb->prepare(
+        "SELECT * FROM $table WHERE id = %d",
+        $reserva_id
+      )
     );
+
+    if ($reserva && $reserva->estado !== $nuevo_estado) {
+      $actualizado = $wpdb->update(
+        $table,
+        ['estado' => $nuevo_estado],
+        ['id' => $reserva_id],
+        ['%s'],
+        ['%d']
+      );
+    }
+
+    if (!empty($actualizado) && is_email($reserva->cliente_email)) {
+      $persona_nombre = get_the_title($reserva->persona_id);
+      $jornada_nombre = rae_nombre_jornada($reserva->jornada);
+      $estado_nombre = ucfirst($nuevo_estado);
+      $asunto = 'Actualización de tu reserva';
+      $mensaje = "Hola {$reserva->cliente_nombre},
+
+Tu reserva ha cambiado de estado.
+
+Detalles:
+Persona seleccionada: {$persona_nombre}
+Fecha: {$reserva->fecha}
+Jornada: {$jornada_nombre}
+Nuevo estado: {$estado_nombre}
+
+Gracias.";
+
+      wp_mail($reserva->cliente_email, $asunto, $mensaje);
+    }
   }
 
   wp_safe_redirect(admin_url('admin.php?page=reservas-aseo'));
