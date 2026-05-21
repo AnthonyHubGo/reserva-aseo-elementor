@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
   const textarea = document.getElementById('rae_fechas_no_disponibles');
   const reasonsTextarea = document.getElementById('rae_motivos_no_disponibilidad_fechas');
+  const occupationsInput = document.getElementById('rae_ocupaciones_personal');
   const startDateInput = document.getElementById('rae_fecha_no_disponible_inicio');
   const endDateInput = document.getElementById('rae_fecha_no_disponible_fin');
   const addButton = document.getElementById('rae_agregar_fecha_no_disponible');
@@ -14,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (
     !textarea ||
     !reasonsTextarea ||
+    !occupationsInput ||
     !startDateInput ||
     !endDateInput ||
     !addButton ||
@@ -72,6 +74,54 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (error) {
       return {};
     }
+  }
+
+  function getOccupations() {
+    try {
+      const occupations = JSON.parse(occupationsInput.value || '{}');
+
+      return occupations && typeof occupations === 'object' && !Array.isArray(occupations) ? occupations : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function getOccupationDetails(date) {
+    const occupations = getOccupations();
+    const dateOccupations = Array.isArray(occupations[date]) ? occupations[date] : [];
+    const hasFullDay = dateOccupations.includes('completa');
+    const hasMorning = dateOccupations.includes('manana');
+    const hasAfternoon = dateOccupations.includes('tarde');
+
+    if (hasFullDay) {
+      return {
+        label: 'Jornada Completa',
+        className: 'is-occupied-full',
+      };
+    }
+
+    if (hasMorning && hasAfternoon) {
+      return {
+        label: 'Mañana y Tarde',
+        className: 'is-occupied-full',
+      };
+    }
+
+    if (hasMorning) {
+      return {
+        label: 'Mañana',
+        className: 'is-occupied-morning',
+      };
+    }
+
+    if (hasAfternoon) {
+      return {
+        label: 'Tarde',
+        className: 'is-occupied-afternoon',
+      };
+    }
+
+    return null;
   }
 
   function setReasons(reasons) {
@@ -161,15 +211,21 @@ document.addEventListener('DOMContentLoaded', function () {
       const isUnavailable = unavailableSet.has(formattedDate);
       const reason = reasons[formattedDate] || getSelectedReason();
       const isFilteredOut = isUnavailable && filter !== 'todos' && reason !== filter;
+      const occupation = getOccupationDetails(formattedDate);
 
       button.type = 'button';
       button.className = [
         'rae-admin-calendar-day',
         isCurrentMonth ? '' : 'is-other-month',
         isUnavailable ? 'is-unavailable' : 'is-available',
+        occupation ? 'is-occupied' : '',
+        occupation ? occupation.className : '',
         isFilteredOut ? 'is-filtered-out' : '',
       ].filter(Boolean).join(' ');
-      button.setAttribute('aria-label', `${formattedDate} ${isUnavailable ? reasonLabels[reason] : 'disponible'}`);
+      button.setAttribute(
+        'aria-label',
+        `${formattedDate} ${occupation ? occupation.label : (isUnavailable ? reasonLabels[reason] : 'disponible')}`
+      );
       button.addEventListener('click', function () {
         const currentReasons = getReasons();
 
@@ -191,6 +247,14 @@ document.addEventListener('DOMContentLoaded', function () {
       if (isUnavailable) {
         reasonText.textContent = reasonLabels[reason] || reason;
         button.appendChild(reasonText);
+      }
+
+      if (occupation) {
+        const occupationText = document.createElement('small');
+
+        occupationText.className = 'rae-admin-calendar-occupation';
+        occupationText.textContent = occupation.label;
+        button.appendChild(occupationText);
       }
 
       calendar.appendChild(button);

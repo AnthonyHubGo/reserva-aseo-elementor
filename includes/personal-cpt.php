@@ -68,6 +68,7 @@ function rae_render_disponibilidad_personal_metabox($post) {
   $fechas_no_disponibles = get_post_meta($post->ID, '_rae_fechas_no_disponibles', true);
   $motivos_por_fecha = get_post_meta($post->ID, '_rae_motivos_no_disponibilidad_fechas', true);
   $motivos_no_disponibilidad = rae_motivos_no_disponibilidad();
+  $ocupaciones = rae_obtener_ocupaciones_personal($post->ID);
 
   if (!$estado) {
     $estado = 'no_disponible';
@@ -165,6 +166,12 @@ function rae_render_disponibilidad_personal_metabox($post) {
     id="rae_motivos_no_disponibilidad_fechas"
     name="rae_motivos_no_disponibilidad_fechas"
     value="<?php echo esc_attr(wp_json_encode($motivos_por_fecha)); ?>"
+  >
+
+  <input
+    type="hidden"
+    id="rae_ocupaciones_personal"
+    value="<?php echo esc_attr(wp_json_encode($ocupaciones)); ?>"
   >
 
   <p class="description">Agrega un intervalo o haz clic en un día del calendario para cambiar su disponibilidad. Para conservar los cambios, haz clic en Actualizar.</p>
@@ -304,4 +311,28 @@ function rae_sanitizar_motivos_no_disponibilidad_fechas($motivos_json, $fechas_v
   }
 
   return $motivos_por_fecha;
+}
+
+function rae_obtener_ocupaciones_personal($post_id) {
+  global $wpdb;
+
+  $table = $wpdb->prefix . 'reservas_aseo';
+  $reservas = $wpdb->get_results(
+    $wpdb->prepare(
+      "SELECT fecha, jornada FROM $table WHERE persona_id = %d AND estado = %s",
+      $post_id,
+      'confirmada'
+    )
+  );
+  $ocupaciones = [];
+
+  foreach ($reservas as $reserva) {
+    if (!isset($ocupaciones[$reserva->fecha])) {
+      $ocupaciones[$reserva->fecha] = [];
+    }
+
+    $ocupaciones[$reserva->fecha][] = $reserva->jornada;
+  }
+
+  return array_map('array_values', $ocupaciones);
 }

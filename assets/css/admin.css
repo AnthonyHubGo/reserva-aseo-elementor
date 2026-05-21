@@ -90,6 +90,7 @@
 }
 
 .rae-admin-calendar-day {
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 4px;
@@ -99,6 +100,12 @@
   color: #1d2327;
   cursor: pointer;
   text-align: right;
+}
+
+.rae-admin-calendar-day > span,
+.rae-admin-calendar-day > small {
+  position: relative;
+  z-index: 1;
 }
 
 .rae-admin-calendar-day:hover,
@@ -124,6 +131,37 @@
   overflow-wrap: anywhere;
   font-size: 11px;
   line-height: 1.2;
+}
+
+.rae-admin-calendar-day.is-occupied::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #d1d5db;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
+.rae-admin-calendar-day.is-occupied-morning::before {
+  right: 50%;
+}
+
+.rae-admin-calendar-day.is-occupied-afternoon::before {
+  left: 50%;
+}
+
+.rae-admin-calendar-day.is-occupied-full::before {
+  inset: 0;
+}
+
+.rae-admin-calendar-day.is-occupied .rae-admin-calendar-occupation {
+  justify-self: center;
+  align-self: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #374151;
+  text-align: center;
 }
 
 .rae-admin-calendar-day.is-available {
