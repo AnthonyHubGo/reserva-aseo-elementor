@@ -27,19 +27,13 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
       'post_type' => 'personal_aseo',
       'numberposts' => -1,
       'post_status' => 'publish',
-      'meta_query' => [
-        'relation' => 'OR',
-        [
-          'key' => '_rae_disponibilidad_estado',
-          'compare' => 'NOT EXISTS',
-        ],
-        [
-          'key' => '_rae_disponibilidad_estado',
-          'value' => 'disponible',
-          'compare' => '=',
-        ],
-      ],
     ]);
+
+    if (function_exists('rae_personal_aseo_disponible')) {
+      $personal = array_values(array_filter($personal, function ($persona) {
+        return rae_personal_aseo_disponible($persona->ID);
+      }));
+    }
     ?>
 
     <form id="rae-form" class="rae-form">

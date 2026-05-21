@@ -234,17 +234,18 @@ add_action('save_post_personal_aseo', function ($post_id) {
 
 function rae_personal_aseo_disponible($post_id, $fecha = '') {
   $estado = get_post_meta($post_id, '_rae_disponibilidad_estado', true);
+  $fechas_no_disponibles = get_post_meta($post_id, '_rae_fechas_no_disponibles', true);
 
-  if ($estado && $estado !== 'disponible') {
+  if (!is_array($fechas_no_disponibles)) {
+    $fechas_no_disponibles = [];
+  }
+
+  if ($estado === 'no_disponible' && empty($fechas_no_disponibles)) {
     return false;
   }
 
-  if ($fecha) {
-    $fechas_no_disponibles = get_post_meta($post_id, '_rae_fechas_no_disponibles', true);
-
-    if (is_array($fechas_no_disponibles) && in_array($fecha, $fechas_no_disponibles, true)) {
-      return false;
-    }
+  if ($fecha && in_array($fecha, $fechas_no_disponibles, true)) {
+    return false;
   }
 
   return true;
