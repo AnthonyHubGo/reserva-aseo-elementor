@@ -125,6 +125,16 @@
   box-shadow: inset 0 -4px 0 #d63638;
 }
 
+.rae-admin-calendar-day.is-holiday {
+  color: #581c87;
+  background: #f3e8ff;
+  box-shadow: inset 0 -4px 0 #9333ea;
+}
+
+.rae-admin-calendar-day.is-holiday.is-unavailable {
+  background: linear-gradient(135deg, #f3e8ff 0%, #f3e8ff 48%, #fde7e7 52%, #fde7e7 100%);
+}
+
 .rae-admin-calendar-day small {
   align-self: end;
   max-width: 100%;
@@ -162,6 +172,16 @@
   background: rgba(255, 255, 255, 0.72);
   color: #374151;
   text-align: center;
+}
+
+.rae-admin-calendar-day .rae-admin-calendar-holiday {
+  justify-self: start;
+  align-self: end;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(147, 51, 234, 0.12);
+  color: #581c87;
+  text-align: left;
 }
 
 .rae-admin-calendar-day.is-available {

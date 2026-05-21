@@ -124,6 +124,81 @@ document.addEventListener('DOMContentLoaded', function () {
     return null;
   }
 
+  function addDays(date, days) {
+    const nextDate = new Date(date);
+
+    nextDate.setDate(nextDate.getDate() + days);
+
+    return nextDate;
+  }
+
+  function moveToNextMonday(date) {
+    const nextDate = new Date(date);
+    const day = nextDate.getDay();
+
+    if (day !== 1) {
+      nextDate.setDate(nextDate.getDate() + ((8 - day) % 7));
+    }
+
+    return nextDate;
+  }
+
+  function getEasterDate(year) {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+
+    return new Date(year, month - 1, day);
+  }
+
+  function getColombianHolidays(year) {
+    const easter = getEasterDate(year);
+    const fixedHolidays = [
+      ['Año Nuevo', new Date(year, 0, 1)],
+      ['Día del Trabajo', new Date(year, 4, 1)],
+      ['Independencia de Colombia', new Date(year, 6, 20)],
+      ['Batalla de Boyacá', new Date(year, 7, 7)],
+      ['Inmaculada Concepción', new Date(year, 11, 8)],
+      ['Navidad', new Date(year, 11, 25)],
+      ['Jueves Santo', addDays(easter, -3)],
+      ['Viernes Santo', addDays(easter, -2)],
+    ];
+    const movedHolidays = [
+      ['Reyes Magos', new Date(year, 0, 6)],
+      ['San José', new Date(year, 2, 19)],
+      ['San Pedro y San Pablo', new Date(year, 5, 29)],
+      ['Asunción de la Virgen', new Date(year, 7, 15)],
+      ['Día de la Raza', new Date(year, 9, 12)],
+      ['Todos los Santos', new Date(year, 10, 1)],
+      ['Independencia de Cartagena', new Date(year, 10, 11)],
+      ['Ascensión del Señor', addDays(easter, 39)],
+      ['Corpus Christi', addDays(easter, 60)],
+      ['Sagrado Corazón', addDays(easter, 68)],
+    ];
+    const holidays = {};
+
+    fixedHolidays.forEach(([label, date]) => {
+      holidays[formatDate(date)] = label;
+    });
+
+    movedHolidays.forEach(([label, date]) => {
+      holidays[formatDate(moveToNextMonday(date))] = label;
+    });
+
+    return holidays;
+  }
+
   function setReasons(reasons) {
     reasonsTextarea.value = JSON.stringify(reasons);
     dispatchFieldChange(reasonsTextarea);
@@ -186,6 +261,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const reasons = getReasons();
     const filter = reasonFilter.value;
     const calendarStart = getCalendarStartDate();
+    const holidays = {
+      ...getColombianHolidays(calendarStart.getFullYear()),
+      ...getColombianHolidays(viewedMonth.getFullYear()),
+      ...getColombianHolidays(addDays(calendarStart, 41).getFullYear()),
+    };
 
     calendar.innerHTML = '';
     monthLabel.textContent = monthFormatter.format(viewedMonth);
@@ -212,11 +292,13 @@ document.addEventListener('DOMContentLoaded', function () {
       const reason = reasons[formattedDate] || getSelectedReason();
       const isFilteredOut = isUnavailable && filter !== 'todos' && reason !== filter;
       const occupation = getOccupationDetails(formattedDate);
+      const holiday = holidays[formattedDate] || '';
 
       button.type = 'button';
       button.className = [
         'rae-admin-calendar-day',
         isCurrentMonth ? '' : 'is-other-month',
+        holiday ? 'is-holiday' : '',
         isUnavailable ? 'is-unavailable' : 'is-available',
         occupation ? 'is-occupied' : '',
         occupation ? occupation.className : '',
@@ -224,7 +306,7 @@ document.addEventListener('DOMContentLoaded', function () {
       ].filter(Boolean).join(' ');
       button.setAttribute(
         'aria-label',
-        `${formattedDate} ${occupation ? occupation.label : (isUnavailable ? reasonLabels[reason] : 'disponible')}`
+        `${formattedDate} ${holiday ? `festivo ${holiday}` : ''} ${occupation ? occupation.label : (isUnavailable ? reasonLabels[reason] : 'disponible')}`
       );
       button.addEventListener('click', function () {
         const currentReasons = getReasons();
@@ -247,6 +329,14 @@ document.addEventListener('DOMContentLoaded', function () {
       if (isUnavailable) {
         reasonText.textContent = reasonLabels[reason] || reason;
         button.appendChild(reasonText);
+      }
+
+      if (holiday) {
+        const holidayText = document.createElement('small');
+
+        holidayText.className = 'rae-admin-calendar-holiday';
+        holidayText.textContent = holiday;
+        button.appendChild(holidayText);
       }
 
       if (occupation) {
