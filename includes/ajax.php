@@ -38,6 +38,10 @@ function rae_guardar_reserva() {
     wp_send_json_error('La jornada no es válida.');
   }
 
+  if (function_exists('rae_personal_aseo_disponible') && !rae_personal_aseo_disponible($persona_id, $fecha)) {
+    wp_send_json_error('La persona seleccionada no está disponible para reservas.');
+  }
+
   $jornadas_conflicto = $jornada === 'completa'
     ? $jornadas_permitidas
     : [$jornada, 'completa'];

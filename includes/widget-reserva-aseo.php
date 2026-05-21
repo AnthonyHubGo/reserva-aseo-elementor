@@ -27,18 +27,42 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
       'post_type' => 'personal_aseo',
       'numberposts' => -1,
       'post_status' => 'publish',
+      'meta_query' => [
+        'relation' => 'OR',
+        [
+          'key' => '_rae_disponibilidad_estado',
+          'compare' => 'NOT EXISTS',
+        ],
+        [
+          'key' => '_rae_disponibilidad_estado',
+          'value' => 'disponible',
+          'compare' => '=',
+        ],
+      ],
     ]);
     ?>
 
     <form id="rae-form" class="rae-form">
       <input type="text" name="nombre" placeholder="Nombre completo" required>
       <input type="email" name="email" placeholder="Correo electrónico" required>
+      <input type="date" name="fecha" required>
 
       <p><strong>Elige la persona para tu servicio:</strong></p>
 
       <div class="rae-personal-grid">
         <?php foreach ($personal as $persona): ?>
-          <label class="rae-person-card">
+          <?php
+          $fechas_no_disponibles = get_post_meta($persona->ID, '_rae_fechas_no_disponibles', true);
+
+          if (!is_array($fechas_no_disponibles)) {
+            $fechas_no_disponibles = [];
+          }
+          ?>
+
+          <label
+            class="rae-person-card"
+            data-unavailable-dates="<?php echo esc_attr(wp_json_encode(array_values($fechas_no_disponibles))); ?>"
+          >
             <input type="radio" name="persona_id" value="<?php echo esc_attr($persona->ID); ?>" required>
 
             <div class="rae-person-photo">
@@ -56,7 +80,7 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
         <?php endforeach; ?>
       </div>
 
-      <input type="date" name="fecha" required>
+      <p class="rae-no-personal-date" hidden>No hay personal disponible para la fecha seleccionada.</p>
 
       <select name="jornada" required>
         <option value="">Selecciona jornada</option>

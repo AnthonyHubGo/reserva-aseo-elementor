@@ -3,6 +3,51 @@ document.addEventListener('DOMContentLoaded', function () {
 
   if (!form) return;
 
+  const dateInput = form.querySelector('input[name="fecha"]');
+  const personCards = Array.from(form.querySelectorAll('.rae-person-card'));
+  const noPersonalDate = form.querySelector('.rae-no-personal-date');
+
+  function updateAvailableCards() {
+    const selectedDate = dateInput ? dateInput.value : '';
+    let visibleCards = 0;
+
+    personCards.forEach(card => {
+      const input = card.querySelector('input[name="persona_id"]');
+      let unavailableDates = [];
+
+      try {
+        unavailableDates = JSON.parse(card.dataset.unavailableDates || '[]');
+      } catch (error) {
+        unavailableDates = [];
+      }
+
+      const isUnavailable = selectedDate && unavailableDates.includes(selectedDate);
+
+      card.hidden = isUnavailable;
+
+      if (input) {
+        input.disabled = isUnavailable;
+
+        if (isUnavailable && input.checked) {
+          input.checked = false;
+        }
+      }
+
+      if (!isUnavailable) {
+        visibleCards += 1;
+      }
+    });
+
+    if (noPersonalDate) {
+      noPersonalDate.hidden = visibleCards > 0;
+    }
+  }
+
+  if (dateInput) {
+    dateInput.addEventListener('change', updateAvailableCards);
+    updateAvailableCards();
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
@@ -23,6 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (result.success) {
           form.reset();
+          updateAvailableCards();
         }
       })
       .catch(() => {

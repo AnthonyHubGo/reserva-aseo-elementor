@@ -1,0 +1,45 @@
+.rae-admin-date-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.rae-admin-date-picker label {
+  display: grid;
+  gap: 4px;
+}
+
+.rae-admin-date-picker span {
+  font-weight: 600;
+}
+
+.rae-admin-date-picker input[type="date"] {
+  min-height: 36px;
+  width: 220px;
+  max-width: 100%;
+}
+
+.rae-admin-date-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.rae-admin-date-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #dcdcde;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.rae-admin-date-empty {
+  color: #646970;
+}

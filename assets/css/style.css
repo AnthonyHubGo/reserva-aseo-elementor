@@ -1,0 +1,59 @@
+.rae-form {
+  width: 100%;
+}
+
+.rae-form input,
+.rae-form select,
+.rae-form button {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.rae-personal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  width: 100%;
+  margin: 12px 0 20px;
+}
+
+.rae-person-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-height: 180px;
+  padding: 16px;
+  border: 1px solid #d6d6d6;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.rae-person-card:hover,
+.rae-person-card:focus-within {
+  border-color: #3f55e7;
+}
+
+.rae-person-photo {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #f3f3f3;
+}
+
+.rae-person-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rae-no-photo {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.rae-no-personal-date {
+  margin: 0 0 20px;
+}
