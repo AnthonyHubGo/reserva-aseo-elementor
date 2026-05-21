@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) exit;
 
 define('RAE_PATH', plugin_dir_path(__FILE__));
 define('RAE_URL', plugin_dir_url(__FILE__));
+define('RAE_DB_VERSION', '1.1.0');
 
 require_once RAE_PATH . 'includes/db.php';
 require_once RAE_PATH . 'includes/activator.php';
@@ -19,6 +20,15 @@ require_once RAE_PATH . 'includes/ajax.php';
 require_once RAE_PATH . 'includes/admin-reservas.php';
 
 register_activation_hook(__FILE__, ['RAE_Activator', 'activate']);
+
+add_action('plugins_loaded', function () {
+  if (get_option('rae_db_version') === RAE_DB_VERSION) {
+    return;
+  }
+
+  RAE_DB::create_table();
+  update_option('rae_db_version', RAE_DB_VERSION);
+});
 
 add_action('wp_enqueue_scripts', function () {
   wp_enqueue_style(

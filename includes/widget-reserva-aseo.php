@@ -41,6 +41,13 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
       <input type="email" name="email" placeholder="Correo electrónico" required>
       <input type="date" name="fecha" required>
 
+      <select name="jornada" required>
+        <option value="">Selecciona jornada</option>
+        <option value="manana">Mañana</option>
+        <option value="tarde">Tarde</option>
+        <option value="completa">Día completa</option>
+      </select>
+
       <p><strong>Elige la persona para tu servicio:</strong></p>
 
       <div class="rae-personal-carousel">
@@ -88,12 +95,13 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
 
       <p class="rae-no-personal-date" hidden>No hay personal disponible para la fecha seleccionada.</p>
 
-      <select name="jornada" required>
-        <option value="">Selecciona jornada</option>
-        <option value="manana">Mañana</option>
-        <option value="tarde">Tarde</option>
-        <option value="completa">Día completa</option>
-      </select>
+      <div class="rae-address-fields">
+        <p><strong>Dirección del servicio:</strong></p>
+        <input type="text" name="ciudad" placeholder="Ciudad" required>
+        <input type="text" name="barrio" placeholder="Barrio" required>
+        <input type="text" name="direccion" placeholder="Dirección" required>
+        <input type="text" name="casa" placeholder="Casa / Apartamento" required>
+      </div>
 
       <button type="submit">Reservar servicio</button>
 

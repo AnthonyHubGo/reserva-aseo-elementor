@@ -208,6 +208,44 @@
   color: #9a3412;
 }
 
+.rae-address-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.rae-address-fields p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #334155;
+}
+
+.rae-address-fields input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rae-address-fields input:hover {
+  border-color: #94a3b8;
+}
+
+.rae-address-fields input:focus {
+  border-color: #3858e9;
+  box-shadow: 0 0 0 3px rgba(56, 88, 233, 0.16);
+  outline: none;
+}
+
 #rae-msg {
   margin-top: 12px;
   color: #334155;
@@ -231,6 +269,10 @@
   }
 
   .rae-personal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rae-address-fields {
     grid-template-columns: 1fr;
   }
 

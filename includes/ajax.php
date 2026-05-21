@@ -15,9 +15,13 @@ function rae_guardar_reserva() {
   $persona_id = absint(wp_unslash($_POST['persona_id'] ?? 0));
   $fecha = sanitize_text_field(wp_unslash($_POST['fecha'] ?? ''));
   $jornada = sanitize_text_field(wp_unslash($_POST['jornada'] ?? ''));
+  $ciudad = sanitize_text_field(wp_unslash($_POST['ciudad'] ?? ''));
+  $barrio = sanitize_text_field(wp_unslash($_POST['barrio'] ?? ''));
+  $direccion = sanitize_text_field(wp_unslash($_POST['direccion'] ?? ''));
+  $casa = sanitize_text_field(wp_unslash($_POST['casa'] ?? ''));
   $jornadas_permitidas = ['manana', 'tarde', 'completa'];
 
-  if (!$nombre || !$email || !$persona_id || !$fecha || !$jornada) {
+  if (!$nombre || !$email || !$persona_id || !$fecha || !$jornada || !$ciudad || !$barrio || !$direccion || !$casa) {
     wp_send_json_error('Todos los campos son obligatorios.');
   }
 
@@ -68,9 +72,13 @@ function rae_guardar_reserva() {
       'persona_id' => $persona_id,
       'fecha' => $fecha,
       'jornada' => $jornada,
+      'cliente_ciudad' => $ciudad,
+      'cliente_barrio' => $barrio,
+      'cliente_direccion' => $direccion,
+      'cliente_casa' => $casa,
       'estado' => 'pendiente',
     ],
-    ['%s', '%s', '%d', '%s', '%s', '%s']
+    ['%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
   );
 
   if (!$insertado) {
@@ -88,6 +96,10 @@ Detalles:
 Persona seleccionada: {$persona_nombre}
 Fecha: {$fecha}
 Jornada: {$jornada_nombre}
+Ciudad: {$ciudad}
+Barrio: {$barrio}
+Dirección: {$direccion}
+Casa: {$casa}
 Estado: Pendiente
 
 Te notificaremos cuando el administrador confirme o cancele tu reserva.
