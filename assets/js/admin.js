@@ -3,9 +3,35 @@ document.addEventListener('DOMContentLoaded', function () {
   const startDateInput = document.getElementById('rae_fecha_no_disponible_inicio');
   const endDateInput = document.getElementById('rae_fecha_no_disponible_fin');
   const addButton = document.getElementById('rae_agregar_fecha_no_disponible');
-  const dateList = document.getElementById('rae_fechas_no_disponibles_lista');
+  const prevButton = document.getElementById('rae_calendario_mes_anterior');
+  const nextButton = document.getElementById('rae_calendario_mes_siguiente');
+  const monthLabel = document.getElementById('rae_calendario_mes_actual');
+  const availabilityFilter = document.getElementById('rae_calendario_filtro_disponibilidad');
+  const calendar = document.getElementById('rae_calendario_disponibilidad');
 
-  if (!textarea || !startDateInput || !endDateInput || !addButton || !dateList) return;
+  if (
+    !textarea ||
+    !startDateInput ||
+    !endDateInput ||
+    !addButton ||
+    !prevButton ||
+    !nextButton ||
+    !monthLabel ||
+    !availabilityFilter ||
+    !calendar
+  ) {
+    return;
+  }
+
+  const monthFormatter = new Intl.DateTimeFormat('es-CO', {
+    month: 'long',
+    year: 'numeric',
+  });
+  const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const initialDates = getDates();
+  let viewedMonth = initialDates.length ? createDate(initialDates[0]) : new Date();
+
+  viewedMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth(), 1);
 
   function getDates() {
     return textarea.value
@@ -18,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const uniqueDates = Array.from(new Set(dates)).sort();
 
     textarea.value = uniqueDates.join('\n');
-    renderDates(uniqueDates);
+    renderCalendar();
   }
 
   function createDate(date) {
@@ -52,35 +78,66 @@ document.addEventListener('DOMContentLoaded', function () {
     return dates;
   }
 
-  function renderDates(dates) {
-    dateList.innerHTML = '';
+  function getCalendarStartDate() {
+    const firstDay = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth(), 1);
+    const mondayOffset = (firstDay.getDay() + 6) % 7;
 
-    if (!dates.length) {
-      const emptyItem = document.createElement('li');
+    firstDay.setDate(firstDay.getDate() - mondayOffset);
 
-      emptyItem.className = 'rae-admin-date-empty';
-      emptyItem.textContent = 'No hay fechas agregadas.';
-      dateList.appendChild(emptyItem);
-      return;
-    }
+    return firstDay;
+  }
 
-    dates.forEach(date => {
-      const item = document.createElement('li');
+  function renderCalendar() {
+    const unavailableDates = getDates();
+    const unavailableSet = new Set(unavailableDates);
+    const filter = availabilityFilter.value;
+    const calendarStart = getCalendarStartDate();
+
+    calendar.innerHTML = '';
+    monthLabel.textContent = monthFormatter.format(viewedMonth);
+
+    weekdays.forEach(weekday => {
+      const item = document.createElement('div');
+
+      item.className = 'rae-admin-calendar-weekday';
+      item.textContent = weekday;
+      calendar.appendChild(item);
+    });
+
+    for (let index = 0; index < 42; index += 1) {
+      const currentDate = new Date(calendarStart);
+
+      currentDate.setDate(calendarStart.getDate() + index);
+
+      const button = document.createElement('button');
       const dateText = document.createElement('span');
-      const removeButton = document.createElement('button');
+      const formattedDate = formatDate(currentDate);
+      const isCurrentMonth = currentDate.getMonth() === viewedMonth.getMonth();
+      const isUnavailable = unavailableSet.has(formattedDate);
+      const availability = isUnavailable ? 'no_disponible' : 'disponible';
+      const isFilteredOut = availability !== filter;
 
-      dateText.textContent = date;
-      removeButton.type = 'button';
-      removeButton.className = 'button-link-delete';
-      removeButton.textContent = 'Quitar';
-      removeButton.addEventListener('click', function () {
-        setDates(getDates().filter(currentDate => currentDate !== date));
+      button.type = 'button';
+      button.className = [
+        'rae-admin-calendar-day',
+        isCurrentMonth ? '' : 'is-other-month',
+        isUnavailable ? 'is-unavailable' : 'is-available',
+        isFilteredOut ? 'is-filtered-out' : '',
+      ].filter(Boolean).join(' ');
+      button.setAttribute('aria-label', `${formattedDate} ${isUnavailable ? 'no disponible' : 'disponible'}`);
+      button.addEventListener('click', function () {
+        if (isUnavailable) {
+          setDates(unavailableDates.filter(date => date !== formattedDate));
+          return;
+        }
+
+        setDates([...unavailableDates, formattedDate]);
       });
 
-      item.appendChild(dateText);
-      item.appendChild(removeButton);
-      dateList.appendChild(item);
-    });
+      dateText.textContent = String(currentDate.getDate());
+      button.appendChild(dateText);
+      calendar.appendChild(button);
+    }
   }
 
   addButton.addEventListener('click', function () {
@@ -90,11 +147,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!datesToAdd.length) return;
 
+    const startDate = createDate(startDateInput.value);
+
+    viewedMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
     setDates([...getDates(), ...datesToAdd]);
     startDateInput.value = '';
     endDateInput.value = '';
     startDateInput.focus();
   });
+
+  prevButton.addEventListener('click', function () {
+    viewedMonth.setMonth(viewedMonth.getMonth() - 1);
+    renderCalendar();
+  });
+
+  nextButton.addEventListener('click', function () {
+    viewedMonth.setMonth(viewedMonth.getMonth() + 1);
+    renderCalendar();
+  });
+
+  availabilityFilter.addEventListener('change', renderCalendar);
 
   [startDateInput, endDateInput].forEach(input => input.addEventListener('keydown', function (event) {
     if (event.key !== 'Enter') return;
@@ -103,5 +175,5 @@ document.addEventListener('DOMContentLoaded', function () {
     addButton.click();
   }));
 
-  renderDates(getDates());
+  renderCalendar();
 });

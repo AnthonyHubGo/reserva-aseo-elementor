@@ -3,15 +3,17 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: end;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
-.rae-admin-date-picker label {
+.rae-admin-date-picker label,
+.rae-admin-calendar-toolbar label {
   display: grid;
   gap: 4px;
 }
 
-.rae-admin-date-picker span {
+.rae-admin-date-picker span,
+.rae-admin-calendar-toolbar span {
   font-weight: 600;
 }
 
@@ -21,25 +23,95 @@
   max-width: 100%;
 }
 
-.rae-admin-date-list {
-  display: grid;
-  gap: 8px;
+.rae-admin-calendar {
   margin: 0 0 8px;
-  padding: 0;
-}
-
-.rae-admin-date-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0;
-  padding: 10px 12px;
   border: 1px solid #dcdcde;
   border-radius: 4px;
   background: #fff;
 }
 
-.rae-admin-date-empty {
-  color: #646970;
+.rae-admin-calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border-bottom: 1px solid #dcdcde;
+}
+
+.rae-admin-calendar-toolbar strong {
+  min-width: 180px;
+  padding: 8px 0;
+  text-transform: capitalize;
+  text-align: center;
+}
+
+.rae-admin-calendar-toolbar select {
+  min-height: 36px;
+  min-width: 180px;
+}
+
+.rae-admin-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(64px, 1fr));
+  gap: 1px;
+  background: #dcdcde;
+}
+
+.rae-admin-calendar-weekday,
+.rae-admin-calendar-day {
+  min-height: 54px;
+  background: #fff;
+}
+
+.rae-admin-calendar-weekday {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  font-weight: 600;
+}
+
+.rae-admin-calendar-day {
+  display: grid;
+  place-items: start end;
+  padding: 8px;
+  border: 0;
+  color: #1d2327;
+  cursor: pointer;
+}
+
+.rae-admin-calendar-day:hover,
+.rae-admin-calendar-day:focus {
+  outline: 2px solid #3858e9;
+  outline-offset: -2px;
+}
+
+.rae-admin-calendar-day.is-other-month {
+  color: #8c8f94;
+  background: #f6f7f7;
+}
+
+.rae-admin-calendar-day.is-unavailable {
+  color: #8a2424;
+  background: #fde7e7;
+  box-shadow: inset 0 -4px 0 #d63638;
+}
+
+.rae-admin-calendar-day.is-available {
+  background: #f0f6fc;
+}
+
+.rae-admin-calendar-day.is-filtered-out {
+  opacity: 0.28;
+}
+
+@media (max-width: 782px) {
+  .rae-admin-calendar-grid {
+    grid-template-columns: repeat(7, minmax(40px, 1fr));
+  }
+
+  .rae-admin-calendar-weekday,
+  .rae-admin-calendar-day {
+    min-height: 44px;
+  }
 }

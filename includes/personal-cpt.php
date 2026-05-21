@@ -116,7 +116,23 @@ function rae_render_disponibilidad_personal_metabox($post) {
     <button type="button" class="button" id="rae_agregar_fecha_no_disponible">Agregar intervalo</button>
   </div>
 
-  <ul id="rae_fechas_no_disponibles_lista" class="rae-admin-date-list"></ul>
+  <div class="rae-admin-calendar">
+    <div class="rae-admin-calendar-toolbar">
+      <button type="button" class="button" id="rae_calendario_mes_anterior">Anterior</button>
+      <strong id="rae_calendario_mes_actual"></strong>
+      <button type="button" class="button" id="rae_calendario_mes_siguiente">Siguiente</button>
+
+      <label>
+        <span>Disponibilidad</span>
+        <select id="rae_calendario_filtro_disponibilidad">
+          <option value="disponible">Disponible</option>
+          <option value="no_disponible" selected>No disponible</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="rae_calendario_disponibilidad" class="rae-admin-calendar-grid"></div>
+  </div>
 
   <textarea
     hidden
@@ -124,7 +140,7 @@ function rae_render_disponibilidad_personal_metabox($post) {
     name="rae_fechas_no_disponibles"
   ><?php echo esc_textarea(implode("\n", $fechas_no_disponibles)); ?></textarea>
 
-  <p class="description">Selecciona una fecha de inicio y una fecha final. Si dejas “Hasta” vacío, se agrega solo la fecha de inicio.</p>
+  <p class="description">Agrega un intervalo o haz clic en un día del calendario para cambiar su disponibilidad.</p>
 
   <?php
 }
