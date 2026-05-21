@@ -10,37 +10,64 @@ function rae_guardar_reserva() {
 
   $table = $wpdb->prefix . 'reservas_aseo';
 
-  $nombre = sanitize_text_field($_POST['nombre'] ?? '');
-  $email = sanitize_email($_POST['email'] ?? '');
-  $persona_id = intval($_POST['persona_id'] ?? 0);
-  $fecha = sanitize_text_field($_POST['fecha'] ?? '');
-  $jornada = sanitize_text_field($_POST['jornada'] ?? '');
+  $nombre = sanitize_text_field(wp_unslash($_POST['nombre'] ?? ''));
+  $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
+  $persona_id = absint(wp_unslash($_POST['persona_id'] ?? 0));
+  $fecha = sanitize_text_field(wp_unslash($_POST['fecha'] ?? ''));
+  $jornada = sanitize_text_field(wp_unslash($_POST['jornada'] ?? ''));
+  $jornadas_permitidas = ['manana', 'tarde', 'completa'];
 
   if (!$nombre || !$email || !$persona_id || !$fecha || !$jornada) {
     wp_send_json_error('Todos los campos son obligatorios.');
   }
 
+  if (!is_email($email)) {
+    wp_send_json_error('El correo electrónico no es válido.');
+  }
+
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+    wp_send_json_error('La fecha no es válida.');
+  }
+
+  [$year, $month, $day] = array_map('intval', explode('-', $fecha));
+  if (!checkdate($month, $day, $year)) {
+    wp_send_json_error('La fecha no es válida.');
+  }
+
+  if (!in_array($jornada, $jornadas_permitidas, true)) {
+    wp_send_json_error('La jornada no es válida.');
+  }
+
+  $jornadas_conflicto = $jornada === 'completa'
+    ? $jornadas_permitidas
+    : [$jornada, 'completa'];
+
+  $placeholders_jornadas = implode(', ', array_fill(0, count($jornadas_conflicto), '%s'));
+  $parametros_conflicto = array_merge([$persona_id, $fecha], $jornadas_conflicto);
+
   $existe = $wpdb->get_var(
     $wpdb->prepare(
-      "SELECT COUNT(*) FROM $table WHERE persona_id = %d AND fecha = %s AND jornada = %s",
-      $persona_id,
-      $fecha,
-      $jornada
+      "SELECT COUNT(*) FROM $table WHERE persona_id = %d AND fecha = %s AND jornada IN ($placeholders_jornadas)",
+      $parametros_conflicto
     )
   );
 
   if ($existe > 0) {
-    wp_send_json_error('Esta persona ya está reservada para esa fecha y jornada.');
+    wp_send_json_error('Esta persona ya tiene una reserva que entra en conflicto para esa fecha.');
   }
 
-  $insertado = $wpdb->insert($table, [
-    'cliente_nombre' => $nombre,
-    'cliente_email' => $email,
-    'persona_id' => $persona_id,
-    'fecha' => $fecha,
-    'jornada' => $jornada,
-    'estado' => 'pendiente',
-  ]);
+  $insertado = $wpdb->insert(
+    $table,
+    [
+      'cliente_nombre' => $nombre,
+      'cliente_email' => $email,
+      'persona_id' => $persona_id,
+      'fecha' => $fecha,
+      'jornada' => $jornada,
+      'estado' => 'pendiente',
+    ],
+    ['%s', '%s', '%d', '%s', '%s', '%s']
+  );
 
   if (!$insertado) {
     wp_send_json_error('No se pudo guardar la reserva.');
