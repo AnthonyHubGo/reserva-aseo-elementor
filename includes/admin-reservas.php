@@ -19,6 +19,47 @@ add_action('admin_menu', function () {
  */
 add_action('admin_init', function () {
   if (
+    isset($_POST['page'], $_POST['rae_action'], $_POST['reserva_id']) &&
+    $_POST['page'] === 'reservas-aseo' &&
+    $_POST['rae_action'] === 'eliminar' &&
+    current_user_can('manage_options')
+  ) {
+    check_admin_referer('rae_eliminar_reserva_' . absint(wp_unslash($_POST['reserva_id'])));
+
+    global $wpdb;
+
+    $table = $wpdb->prefix . 'reservas_aseo';
+    $reserva_id = absint(wp_unslash($_POST['reserva_id']));
+    $reserva = $wpdb->get_row(
+      $wpdb->prepare(
+        "SELECT * FROM $table WHERE id = %d",
+        $reserva_id
+      )
+    );
+
+    if ($reserva) {
+      $wpdb->update(
+        $table,
+        ['estado' => 'cancelada'],
+        ['id' => $reserva_id],
+        ['%s'],
+        ['%d']
+      );
+
+      rae_enviar_email_estado_reserva($reserva, 'cancelada');
+
+      $wpdb->delete(
+        $table,
+        ['id' => $reserva_id],
+        ['%d']
+      );
+    }
+
+    wp_safe_redirect(admin_url('admin.php?page=reservas-aseo'));
+    exit;
+  }
+
+  if (
     !isset($_GET['page'], $_GET['rae_action'], $_GET['reserva_id']) ||
     $_GET['page'] !== 'reservas-aseo' ||
     !current_user_can('manage_options')
@@ -69,23 +110,7 @@ add_action('admin_init', function () {
     }
 
     if (!empty($actualizado) && is_email($reserva->cliente_email)) {
-      $persona_nombre = get_the_title($reserva->persona_id);
-      $jornada_nombre = rae_nombre_jornada($reserva->jornada);
-      $estado_nombre = ucfirst($nuevo_estado);
-      $asunto = 'Actualización de tu reserva';
-      $mensaje = "Hola {$reserva->cliente_nombre},
-
-Tu reserva ha cambiado de estado.
-
-Detalles:
-Persona seleccionada: {$persona_nombre}
-Fecha: {$reserva->fecha}
-Jornada: {$jornada_nombre}
-Nuevo estado: {$estado_nombre}
-
-Gracias.";
-
-      wp_mail($reserva->cliente_email, $asunto, $mensaje);
+      rae_enviar_email_estado_reserva($reserva, $nuevo_estado);
     }
   }
 
@@ -241,31 +266,63 @@ function rae_render_admin_reservas() {
               <td><?php echo esc_html(ucfirst($reserva->estado)); ?></td>
               <td><?php echo esc_html($reserva->created_at); ?></td>
               <td>
-                <?php if ($reserva->estado !== 'confirmada'): ?>
-                  <a
-                    class="button button-primary"
-                    href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
-                      'page' => 'reservas-aseo',
-                      'rae_action' => 'confirmar',
-                      'reserva_id' => $reserva->id,
-                    ]), admin_url('admin.php'))); ?>"
-                  >
-                    Confirmar
-                  </a>
-                <?php endif; ?>
+                <div class="rae-reserva-actions">
+                  <div class="rae-reserva-state-actions">
+                    <?php if ($reserva->estado !== 'confirmada'): ?>
+                      <a
+                        class="button button-primary"
+                        href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
+                          'page' => 'reservas-aseo',
+                          'rae_action' => 'confirmar',
+                          'reserva_id' => $reserva->id,
+                        ]), admin_url('admin.php'))); ?>"
+                      >
+                        Confirmar
+                      </a>
+                    <?php endif; ?>
 
-                <?php if ($reserva->estado !== 'cancelada'): ?>
-                  <a
-                    class="button"
-                    href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
-                      'page' => 'reservas-aseo',
-                      'rae_action' => 'cancelar',
-                      'reserva_id' => $reserva->id,
-                    ]), admin_url('admin.php'))); ?>"
+                    <?php if ($reserva->estado !== 'cancelada'): ?>
+                      <a
+                        class="button"
+                        href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
+                          'page' => 'reservas-aseo',
+                          'rae_action' => 'cancelar',
+                          'reserva_id' => $reserva->id,
+                        ]), admin_url('admin.php'))); ?>"
+                      >
+                        Cancelar
+                      </a>
+                    <?php endif; ?>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="button rae-delete-reserva-button"
+                    data-modal-id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>"
+                    aria-label="Eliminar reserva"
                   >
-                    Cancelar
-                  </a>
-                <?php endif; ?>
+                    <span class="dashicons dashicons-trash"></span>
+                  </button>
+                </div>
+
+                <div id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-delete-reserva-modal" hidden>
+                  <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">
+                    <h2 id="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">Eliminar reserva</h2>
+                    <p>Estas seguro de que quieres eliminar esta reserva? Si la eliminas se cancelará automaticamente y le llegará un mensaje al cliente de que fue cancelada su reserva</p>
+
+                    <div class="rae-delete-reserva-actions">
+                      <form method="post">
+                        <input type="hidden" name="page" value="reservas-aseo">
+                        <input type="hidden" name="rae_action" value="eliminar">
+                        <input type="hidden" name="reserva_id" value="<?php echo esc_attr($reserva->id); ?>">
+                        <?php wp_nonce_field('rae_eliminar_reserva_' . absint($reserva->id)); ?>
+                        <button type="submit" class="button button-primary">Cancelar reserva</button>
+                      </form>
+
+                      <button type="button" class="button rae-delete-reserva-close">Volver</button>
+                    </div>
+                  </div>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>
@@ -273,6 +330,128 @@ function rae_render_admin_reservas() {
       </tbody>
     </table>
   </div>
+
+  <style>
+    .rae-reserva-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 260px;
+    }
+
+    .rae-reserva-state-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .widefat .rae-delete-reserva-button.button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      min-height: 40px;
+      padding: 0;
+      margin-left: auto;
+      border-color: #dc2626 !important;
+      background: transparent !important;
+      color: #dc2626 !important;
+    }
+
+    .widefat .rae-delete-reserva-button.button:hover,
+    .widefat .rae-delete-reserva-button.button:focus {
+      border-color: #b91c1c !important;
+      background: rgba(220, 38, 38, 0.08) !important;
+      color: #b91c1c !important;
+    }
+
+    .rae-delete-reserva-button .dashicons {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      color: currentColor;
+      line-height: 1;
+    }
+
+    .widefat .rae-delete-reserva-button.button .dashicons,
+    .widefat .rae-delete-reserva-button.button .dashicons::before {
+      color: #dc2626 !important;
+    }
+
+    .widefat .rae-delete-reserva-button.button:hover .dashicons,
+    .widefat .rae-delete-reserva-button.button:hover .dashicons::before,
+    .widefat .rae-delete-reserva-button.button:focus .dashicons,
+    .widefat .rae-delete-reserva-button.button:focus .dashicons::before {
+      color: #b91c1c !important;
+    }
+
+    .rae-delete-reserva-modal {
+      position: fixed;
+      z-index: 100000;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.45);
+    }
+
+    .rae-delete-reserva-modal[hidden] {
+      display: none;
+    }
+
+    .rae-delete-reserva-dialog {
+      width: min(520px, 100%);
+      padding: 24px;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    }
+
+    .rae-delete-reserva-dialog h2 {
+      margin-top: 0;
+    }
+
+    .rae-delete-reserva-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+  </style>
+
+  <script>
+    document.addEventListener('click', function (event) {
+      const openButton = event.target.closest('.rae-delete-reserva-button');
+      const closeButton = event.target.closest('.rae-delete-reserva-close');
+
+      if (openButton) {
+        const modal = document.getElementById(openButton.dataset.modalId);
+
+        if (modal) {
+          modal.hidden = false;
+        }
+      }
+
+      if (closeButton) {
+        const modal = closeButton.closest('.rae-delete-reserva-modal');
+
+        if (modal) {
+          modal.hidden = true;
+        }
+      }
+
+      if (event.target.classList.contains('rae-delete-reserva-modal')) {
+        event.target.hidden = true;
+      }
+    });
+  </script>
 
   <?php
 }
@@ -285,6 +464,30 @@ function rae_nombre_jornada($jornada) {
   ];
 
   return $jornadas[$jornada] ?? $jornada;
+}
+
+function rae_enviar_email_estado_reserva($reserva, $nuevo_estado) {
+  if (!$reserva || !is_email($reserva->cliente_email)) {
+    return;
+  }
+
+  $persona_nombre = get_the_title($reserva->persona_id);
+  $jornada_nombre = rae_nombre_jornada($reserva->jornada);
+  $estado_nombre = ucfirst($nuevo_estado);
+  $asunto = 'Actualización de tu reserva';
+  $mensaje = "Hola {$reserva->cliente_nombre},
+
+Tu reserva ha cambiado de estado.
+
+Detalles:
+Persona seleccionada: {$persona_nombre}
+Fecha: {$reserva->fecha}
+Jornada: {$jornada_nombre}
+Nuevo estado: {$estado_nombre}
+
+Gracias.";
+
+  wp_mail($reserva->cliente_email, $asunto, $mensaje);
 }
 
 function rae_fecha_valida($fecha) {
