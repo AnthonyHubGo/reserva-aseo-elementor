@@ -1,23 +1,26 @@
 document.addEventListener('DOMContentLoaded', function () {
   const textarea = document.getElementById('rae_fechas_no_disponibles');
+  const reasonsTextarea = document.getElementById('rae_motivos_no_disponibilidad_fechas');
   const startDateInput = document.getElementById('rae_fecha_no_disponible_inicio');
   const endDateInput = document.getElementById('rae_fecha_no_disponible_fin');
   const addButton = document.getElementById('rae_agregar_fecha_no_disponible');
   const prevButton = document.getElementById('rae_calendario_mes_anterior');
   const nextButton = document.getElementById('rae_calendario_mes_siguiente');
   const monthLabel = document.getElementById('rae_calendario_mes_actual');
-  const availabilityFilter = document.getElementById('rae_calendario_filtro_disponibilidad');
+  const reasonFilter = document.getElementById('rae_calendario_filtro_motivo');
   const calendar = document.getElementById('rae_calendario_disponibilidad');
+  const reasonInputs = Array.from(document.querySelectorAll('input[name="rae_disponibilidad_motivo"]'));
 
   if (
     !textarea ||
+    !reasonsTextarea ||
     !startDateInput ||
     !endDateInput ||
     !addButton ||
     !prevButton ||
     !nextButton ||
     !monthLabel ||
-    !availabilityFilter ||
+    !reasonFilter ||
     !calendar
   ) {
     return;
@@ -28,6 +31,11 @@ document.addEventListener('DOMContentLoaded', function () {
     year: 'numeric',
   });
   const weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const reasonLabels = {
+    vacaciones: 'Vacaciones',
+    incapacidad: 'Incapacidad',
+    licencia_maternidad: 'Licencia de Maternidad',
+  };
   const initialDates = getDates();
   let viewedMonth = initialDates.length ? createDate(initialDates[0]) : new Date();
 
@@ -42,9 +50,44 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function setDates(dates) {
     const uniqueDates = Array.from(new Set(dates)).sort();
+    const currentReasons = getReasons();
+    const nextReasons = {};
 
     textarea.value = uniqueDates.join('\n');
+    dispatchFieldChange(textarea);
+
+    uniqueDates.forEach(date => {
+      nextReasons[date] = currentReasons[date] || getSelectedReason();
+    });
+
+    setReasons(nextReasons);
     renderCalendar();
+  }
+
+  function getReasons() {
+    try {
+      const reasons = JSON.parse(reasonsTextarea.value || '{}');
+
+      return reasons && typeof reasons === 'object' && !Array.isArray(reasons) ? reasons : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function setReasons(reasons) {
+    reasonsTextarea.value = JSON.stringify(reasons);
+    dispatchFieldChange(reasonsTextarea);
+  }
+
+  function getSelectedReason() {
+    const selectedReason = reasonInputs.find(input => input.checked);
+
+    return selectedReason ? selectedReason.value : 'vacaciones';
+  }
+
+  function dispatchFieldChange(field) {
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function createDate(date) {
@@ -90,7 +133,8 @@ document.addEventListener('DOMContentLoaded', function () {
   function renderCalendar() {
     const unavailableDates = getDates();
     const unavailableSet = new Set(unavailableDates);
-    const filter = availabilityFilter.value;
+    const reasons = getReasons();
+    const filter = reasonFilter.value;
     const calendarStart = getCalendarStartDate();
 
     calendar.innerHTML = '';
@@ -111,11 +155,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const button = document.createElement('button');
       const dateText = document.createElement('span');
+      const reasonText = document.createElement('small');
       const formattedDate = formatDate(currentDate);
       const isCurrentMonth = currentDate.getMonth() === viewedMonth.getMonth();
       const isUnavailable = unavailableSet.has(formattedDate);
-      const availability = isUnavailable ? 'no_disponible' : 'disponible';
-      const isFilteredOut = availability !== filter;
+      const reason = reasons[formattedDate] || getSelectedReason();
+      const isFilteredOut = isUnavailable && filter !== 'todos' && reason !== filter;
 
       button.type = 'button';
       button.className = [
@@ -124,18 +169,30 @@ document.addEventListener('DOMContentLoaded', function () {
         isUnavailable ? 'is-unavailable' : 'is-available',
         isFilteredOut ? 'is-filtered-out' : '',
       ].filter(Boolean).join(' ');
-      button.setAttribute('aria-label', `${formattedDate} ${isUnavailable ? 'no disponible' : 'disponible'}`);
+      button.setAttribute('aria-label', `${formattedDate} ${isUnavailable ? reasonLabels[reason] : 'disponible'}`);
       button.addEventListener('click', function () {
+        const currentReasons = getReasons();
+
         if (isUnavailable) {
+          delete currentReasons[formattedDate];
+          setReasons(currentReasons);
           setDates(unavailableDates.filter(date => date !== formattedDate));
           return;
         }
 
+        currentReasons[formattedDate] = getSelectedReason();
+        setReasons(currentReasons);
         setDates([...unavailableDates, formattedDate]);
       });
 
       dateText.textContent = String(currentDate.getDate());
       button.appendChild(dateText);
+
+      if (isUnavailable) {
+        reasonText.textContent = reasonLabels[reason] || reason;
+        button.appendChild(reasonText);
+      }
+
       calendar.appendChild(button);
     }
   }
@@ -150,6 +207,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const startDate = createDate(startDateInput.value);
 
     viewedMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const currentReasons = getReasons();
+    const selectedReason = getSelectedReason();
+
+    datesToAdd.forEach(date => {
+      currentReasons[date] = selectedReason;
+    });
+
+    setReasons(currentReasons);
     setDates([...getDates(), ...datesToAdd]);
     startDateInput.value = '';
     endDateInput.value = '';
@@ -166,7 +231,8 @@ document.addEventListener('DOMContentLoaded', function () {
     renderCalendar();
   });
 
-  availabilityFilter.addEventListener('change', renderCalendar);
+  reasonFilter.addEventListener('change', renderCalendar);
+  reasonInputs.forEach(input => input.addEventListener('change', renderCalendar));
 
   [startDateInput, endDateInput].forEach(input => input.addEventListener('keydown', function (event) {
     if (event.key !== 'Enter') return;

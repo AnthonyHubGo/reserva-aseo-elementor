@@ -6,6 +6,24 @@
   margin-bottom: 16px;
 }
 
+.rae-admin-reason-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.rae-admin-reason-options label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #dcdcde;
+  border-radius: 4px;
+  background: #fff;
+}
+
 .rae-admin-date-picker label,
 .rae-admin-calendar-toolbar label {
   display: grid;
@@ -73,11 +91,14 @@
 
 .rae-admin-calendar-day {
   display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 4px;
   place-items: start end;
   padding: 8px;
   border: 0;
   color: #1d2327;
   cursor: pointer;
+  text-align: right;
 }
 
 .rae-admin-calendar-day:hover,
@@ -95,6 +116,14 @@
   color: #8a2424;
   background: #fde7e7;
   box-shadow: inset 0 -4px 0 #d63638;
+}
+
+.rae-admin-calendar-day small {
+  align-self: end;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .rae-admin-calendar-day.is-available {

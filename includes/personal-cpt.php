@@ -66,13 +66,23 @@ function rae_render_disponibilidad_personal_metabox($post) {
   $estado = get_post_meta($post->ID, '_rae_disponibilidad_estado', true);
   $motivo = get_post_meta($post->ID, '_rae_disponibilidad_motivo', true);
   $fechas_no_disponibles = get_post_meta($post->ID, '_rae_fechas_no_disponibles', true);
+  $motivos_por_fecha = get_post_meta($post->ID, '_rae_motivos_no_disponibilidad_fechas', true);
+  $motivos_no_disponibilidad = rae_motivos_no_disponibilidad();
 
   if (!$estado) {
-    $estado = 'disponible';
+    $estado = 'no_disponible';
+  }
+
+  if (!$motivo || !array_key_exists($motivo, $motivos_no_disponibilidad)) {
+    $motivo = 'vacaciones';
   }
 
   if (!is_array($fechas_no_disponibles)) {
     $fechas_no_disponibles = [];
+  }
+
+  if (!is_array($motivos_por_fecha)) {
+    $motivos_por_fecha = [];
   }
 
   wp_nonce_field('rae_guardar_disponibilidad_personal', 'rae_disponibilidad_personal_nonce');
@@ -91,12 +101,19 @@ function rae_render_disponibilidad_personal_metabox($post) {
     <label for="rae_disponibilidad_motivo"><strong>Motivo de no disponibilidad</strong></label>
   </p>
 
-  <textarea
-    id="rae_disponibilidad_motivo"
-    name="rae_disponibilidad_motivo"
-    rows="4"
-    style="width: 100%;"
-  ><?php echo esc_textarea($motivo); ?></textarea>
+  <div class="rae-admin-reason-options" id="rae_disponibilidad_motivo">
+    <?php foreach ($motivos_no_disponibilidad as $valor => $etiqueta): ?>
+      <label>
+        <input
+          type="radio"
+          name="rae_disponibilidad_motivo"
+          value="<?php echo esc_attr($valor); ?>"
+          <?php checked($motivo, $valor); ?>
+        >
+        <span><?php echo esc_html($etiqueta); ?></span>
+      </label>
+    <?php endforeach; ?>
+  </div>
 
   <p>
     <label for="rae_fechas_no_disponibles"><strong>Fechas no disponibles</strong></label>
@@ -123,10 +140,12 @@ function rae_render_disponibilidad_personal_metabox($post) {
       <button type="button" class="button" id="rae_calendario_mes_siguiente">Siguiente</button>
 
       <label>
-        <span>Disponibilidad</span>
-        <select id="rae_calendario_filtro_disponibilidad">
-          <option value="disponible">Disponible</option>
-          <option value="no_disponible" selected>No disponible</option>
+        <span>No disponibilidad</span>
+        <select id="rae_calendario_filtro_motivo">
+          <?php foreach ($motivos_no_disponibilidad as $valor => $etiqueta): ?>
+            <option value="<?php echo esc_attr($valor); ?>"><?php echo esc_html($etiqueta); ?></option>
+          <?php endforeach; ?>
+          <option value="todos" selected>Todos los motivos</option>
         </select>
       </label>
     </div>
@@ -134,13 +153,21 @@ function rae_render_disponibilidad_personal_metabox($post) {
     <div id="rae_calendario_disponibilidad" class="rae-admin-calendar-grid"></div>
   </div>
 
-  <textarea
-    hidden
+  <input
+    type="hidden"
     id="rae_fechas_no_disponibles"
     name="rae_fechas_no_disponibles"
-  ><?php echo esc_textarea(implode("\n", $fechas_no_disponibles)); ?></textarea>
+    value="<?php echo esc_attr(implode("\n", $fechas_no_disponibles)); ?>"
+  >
 
-  <p class="description">Agrega un intervalo o haz clic en un día del calendario para cambiar su disponibilidad.</p>
+  <input
+    type="hidden"
+    id="rae_motivos_no_disponibilidad_fechas"
+    name="rae_motivos_no_disponibilidad_fechas"
+    value="<?php echo esc_attr(wp_json_encode($motivos_por_fecha)); ?>"
+  >
+
+  <p class="description">Agrega un intervalo o haz clic en un día del calendario para cambiar su disponibilidad. Para conservar los cambios, haz clic en Actualizar.</p>
 
   <?php
 }
@@ -174,10 +201,18 @@ add_action('save_post_personal_aseo', function ($post_id) {
   }
 
   $motivo = isset($_POST['rae_disponibilidad_motivo'])
-    ? sanitize_textarea_field(wp_unslash($_POST['rae_disponibilidad_motivo']))
-    : '';
+    ? sanitize_key(wp_unslash($_POST['rae_disponibilidad_motivo']))
+    : 'vacaciones';
+
+  if (!array_key_exists($motivo, rae_motivos_no_disponibilidad())) {
+    $motivo = 'vacaciones';
+  }
+
   $fechas_no_disponibles = isset($_POST['rae_fechas_no_disponibles'])
     ? rae_sanitizar_fechas_no_disponibles(wp_unslash($_POST['rae_fechas_no_disponibles']))
+    : [];
+  $motivos_por_fecha = isset($_POST['rae_motivos_no_disponibilidad_fechas'])
+    ? rae_sanitizar_motivos_no_disponibilidad_fechas(wp_unslash($_POST['rae_motivos_no_disponibilidad_fechas']), $fechas_no_disponibles, $motivo)
     : [];
 
   update_post_meta($post_id, '_rae_disponibilidad_estado', $estado);
@@ -190,8 +225,10 @@ add_action('save_post_personal_aseo', function ($post_id) {
 
   if (!empty($fechas_no_disponibles)) {
     update_post_meta($post_id, '_rae_fechas_no_disponibles', $fechas_no_disponibles);
+    update_post_meta($post_id, '_rae_motivos_no_disponibilidad_fechas', $motivos_por_fecha);
   } else {
     delete_post_meta($post_id, '_rae_fechas_no_disponibles');
+    delete_post_meta($post_id, '_rae_motivos_no_disponibilidad_fechas');
   }
 });
 
@@ -232,4 +269,38 @@ function rae_sanitizar_fechas_no_disponibles($fechas) {
   }
 
   return array_values(array_unique($fechas_validas));
+}
+
+function rae_motivos_no_disponibilidad() {
+  return [
+    'vacaciones' => 'Vacaciones',
+    'incapacidad' => 'Incapacidad',
+    'licencia_maternidad' => 'Licencia de Maternidad',
+  ];
+}
+
+function rae_sanitizar_motivos_no_disponibilidad_fechas($motivos_json, $fechas_validas, $motivo_default) {
+  $motivos = json_decode(sanitize_textarea_field($motivos_json), true);
+  $motivos_validos = rae_motivos_no_disponibilidad();
+  $motivos_por_fecha = [];
+
+  if (!array_key_exists($motivo_default, $motivos_validos)) {
+    $motivo_default = 'vacaciones';
+  }
+
+  if (!is_array($motivos)) {
+    $motivos = [];
+  }
+
+  foreach ($fechas_validas as $fecha) {
+    $motivo = isset($motivos[$fecha]) ? sanitize_key($motivos[$fecha]) : $motivo_default;
+
+    if (!array_key_exists($motivo, $motivos_validos)) {
+      $motivo = $motivo_default;
+    }
+
+    $motivos_por_fecha[$fecha] = $motivo;
+  }
+
+  return $motivos_por_fecha;
 }
