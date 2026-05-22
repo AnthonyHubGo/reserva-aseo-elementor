@@ -34,6 +34,24 @@ function rae_email_headers() {
   return ['Content-Type: text/html; charset=UTF-8'];
 }
 
+function rae_email_logo_url() {
+  $logo_id = absint(get_option('rae_email_logo_id'));
+
+  return $logo_id ? wp_get_attachment_image_url($logo_id, 'medium') : '';
+}
+
+function rae_email_brand_header() {
+  $logo_url = rae_email_logo_url();
+
+  if ($logo_url) {
+    return '<img src="' . esc_url($logo_url) . '" alt="SAT" style="display: block; max-width: 160px; height: auto;">';
+  }
+
+  return '
+    <div style="color: #ffffff; font-size: 26px; font-weight: 800; letter-spacing: 0;">SAT</div>
+    <div style="margin-top: 4px; color: #e8fbfc; font-size: 14px;">Servicio de aseo doméstico</div>';
+}
+
 function rae_email_row($label, $value) {
   return '
     <tr>
@@ -70,8 +88,7 @@ function rae_email_template($heading, $intro, $cliente_rows, $reserva_rows, $foo
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px; border-collapse: collapse;">
             <tr>
               <td style="padding: 22px 26px; border-radius: 14px 14px 0 0; background: #00939a;">
-                <div style="color: #ffffff; font-size: 26px; font-weight: 800; letter-spacing: 0;">SAT</div>
-                <div style="margin-top: 4px; color: #e8fbfc; font-size: 14px;">Servicio de aseo doméstico</div>
+                ' . rae_email_brand_header() . '
               </td>
             </tr>
             <tr>

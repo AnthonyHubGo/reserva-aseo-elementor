@@ -19,6 +19,7 @@ require_once RAE_PATH . 'includes/elementor-widget.php';
 require_once RAE_PATH . 'includes/email-templates.php';
 require_once RAE_PATH . 'includes/ajax.php';
 require_once RAE_PATH . 'includes/admin-reservas.php';
+require_once RAE_PATH . 'includes/admin-settings.php';
 
 register_activation_hook(__FILE__, ['RAE_Activator', 'activate']);
 
