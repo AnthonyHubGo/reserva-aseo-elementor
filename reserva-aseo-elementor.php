@@ -57,7 +57,7 @@ function rae_register_reserva_assets() {
     'rae-css',
     RAE_URL . 'assets/css/style.css',
     ['rae-nunito', 'rae-flatpickr'],
-    '1.0.9'
+    '1.1.1'
   );
 
   wp_register_script(
@@ -72,7 +72,7 @@ function rae_register_reserva_assets() {
     'rae-js',
     RAE_URL . 'assets/js/app.js',
     ['rae-flatpickr'],
-    '1.0.9',
+    '1.1.1',
     true
   );
 

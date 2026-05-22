@@ -45,6 +45,10 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
     ?>
 
     <form id="rae-form" class="rae-form">
+      <div class="rae-no-availability-alert" <?php echo empty($personal) ? '' : 'hidden'; ?>>
+        No se puede reservar este día porque no hay personal disponible.
+      </div>
+
       <input type="text" name="nombre" placeholder="Nombre completo" required>
       <input type="email" name="email" placeholder="Correo electrónico" required>
       <input type="tel" name="telefono" placeholder="Número de teléfono de contacto" required>

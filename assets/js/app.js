@@ -8,8 +8,10 @@ function raeInitReservationForm(form) {
   const personalViewport = form.querySelector('.rae-personal-viewport');
   const personCards = Array.from(form.querySelectorAll('.rae-person-card'));
   const noPersonalDate = form.querySelector('.rae-no-personal-date');
+  const noAvailabilityAlert = form.querySelector('.rae-no-availability-alert');
   const prevButton = form.querySelector('.rae-carousel-prev');
   const nextButton = form.querySelector('.rae-carousel-next');
+  const submitButton = form.querySelector('button[type="submit"]');
   const dateConfig = window.raeReservaConfig || {};
   const today = dateConfig.today || new Date().toISOString().slice(0, 10);
   const holidays = dateConfig.holidays || {};
@@ -123,8 +125,18 @@ function raeInitReservationForm(form) {
       }
     });
 
+    const hasNoAvailability = visibleCards === 0;
+
+    if (noAvailabilityAlert) {
+      noAvailabilityAlert.hidden = !hasNoAvailability;
+    }
+
     if (noPersonalDate) {
-      noPersonalDate.hidden = visibleCards > 0;
+      noPersonalDate.hidden = true;
+    }
+
+    if (submitButton) {
+      submitButton.disabled = hasNoAvailability;
     }
 
     carouselPage = 0;
@@ -172,10 +184,19 @@ function raeInitReservationForm(form) {
     const msg = form.querySelector('#rae-msg');
     const data = new FormData(form);
     const dateError = isInvalidReservationDate(data.get('fecha'));
+    const hasNoAvailability = submitButton && submitButton.disabled;
 
     if (dateError) {
       if (msg) {
         msg.innerText = dateError;
+      }
+
+      return;
+    }
+
+    if (hasNoAvailability) {
+      if (msg) {
+        msg.innerText = 'No se puede reservar este día porque no hay personal disponible.';
       }
 
       return;
