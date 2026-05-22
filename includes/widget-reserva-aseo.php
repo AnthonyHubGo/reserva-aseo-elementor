@@ -75,11 +75,16 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
               if (!is_array($fechas_no_disponibles)) {
                 $fechas_no_disponibles = [];
               }
+
+              $ocupaciones = function_exists('rae_obtener_ocupaciones_personal')
+                ? rae_obtener_ocupaciones_personal($persona->ID)
+                : [];
               ?>
 
               <label
                 class="rae-person-card"
                 data-unavailable-dates="<?php echo esc_attr(wp_json_encode(array_values($fechas_no_disponibles))); ?>"
+                data-occupations="<?php echo esc_attr(wp_json_encode($ocupaciones)); ?>"
               >
                 <input type="radio" name="persona_id" value="<?php echo esc_attr($persona->ID); ?>" required>
 

@@ -4,6 +4,7 @@ function raeInitReservationForm(form) {
   form.dataset.raeInitialized = 'true';
 
   const dateInput = form.querySelector('input[name="fecha"]');
+  const jornadaInput = form.querySelector('select[name="jornada"]');
   const personalViewport = form.querySelector('.rae-personal-viewport');
   const personCards = Array.from(form.querySelectorAll('.rae-person-card'));
   const noPersonalDate = form.querySelector('.rae-no-personal-date');
@@ -42,6 +43,18 @@ function raeInitReservationForm(form) {
     return personCards.filter(card => card.dataset.availableForDate !== 'false');
   }
 
+  function jornadaHasConflict(selectedJornada, occupiedJornadas) {
+    if (!selectedJornada || !Array.isArray(occupiedJornadas)) {
+      return false;
+    }
+
+    if (selectedJornada === 'completa') {
+      return occupiedJornadas.length > 0;
+    }
+
+    return occupiedJornadas.includes('completa') || occupiedJornadas.includes(selectedJornada);
+  }
+
   function updateCarousel() {
     const visibleCards = getVisibleCards();
     const cardsPerPage = getCardsPerPage();
@@ -71,11 +84,13 @@ function raeInitReservationForm(form) {
 
   function updateAvailableCards() {
     const selectedDate = dateInput ? dateInput.value : '';
+    const selectedJornada = jornadaInput ? jornadaInput.value : '';
     let visibleCards = 0;
 
     personCards.forEach(card => {
       const input = card.querySelector('input[name="persona_id"]');
       let unavailableDates = [];
+      let occupations = {};
 
       try {
         unavailableDates = JSON.parse(card.dataset.unavailableDates || '[]');
@@ -83,19 +98,27 @@ function raeInitReservationForm(form) {
         unavailableDates = [];
       }
 
-      const isUnavailable = selectedDate && unavailableDates.includes(selectedDate);
+      try {
+        occupations = JSON.parse(card.dataset.occupations || '{}');
+      } catch (error) {
+        occupations = {};
+      }
 
-      card.dataset.availableForDate = isUnavailable ? 'false' : 'true';
+      const isUnavailable = selectedDate && unavailableDates.includes(selectedDate);
+      const isOccupied = selectedDate && jornadaHasConflict(selectedJornada, occupations[selectedDate]);
+      const shouldHideCard = isUnavailable || isOccupied;
+
+      card.dataset.availableForDate = shouldHideCard ? 'false' : 'true';
 
       if (input) {
-        input.disabled = isUnavailable;
+        input.disabled = shouldHideCard;
 
-        if (isUnavailable && input.checked) {
+        if (shouldHideCard && input.checked) {
           input.checked = false;
         }
       }
 
-      if (!isUnavailable) {
+      if (!shouldHideCard) {
         visibleCards += 1;
       }
     });
@@ -121,6 +144,10 @@ function raeInitReservationForm(form) {
 
     dateInput.addEventListener('change', updateAvailableCards);
     updateAvailableCards();
+  }
+
+  if (jornadaInput) {
+    jornadaInput.addEventListener('change', updateAvailableCards);
   }
 
   if (prevButton) {
