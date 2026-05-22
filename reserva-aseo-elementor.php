@@ -32,17 +32,24 @@ add_action('plugins_loaded', function () {
 
 function rae_register_reserva_assets() {
   wp_register_style(
+    'rae-nunito',
+    'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap',
+    [],
+    null
+  );
+
+  wp_register_style(
     'rae-css',
     RAE_URL . 'assets/css/style.css',
-    [],
-    '1.0.2'
+    ['rae-nunito'],
+    '1.0.4'
   );
 
   wp_register_script(
     'rae-js',
     RAE_URL . 'assets/js/app.js',
     [],
-    '1.0.2',
+    '1.0.4',
     true
   );
 

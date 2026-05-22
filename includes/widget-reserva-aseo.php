@@ -23,7 +23,7 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
   }
 
   public function get_style_depends() {
-    return ['rae-css'];
+    return ['rae-nunito', 'rae-css'];
   }
 
   public function get_script_depends() {
