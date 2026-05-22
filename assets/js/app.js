@@ -1,9 +1,10 @@
-document.addEventListener('DOMContentLoaded', function () {
-  const form = document.getElementById('rae-form');
+function raeInitReservationForm(form) {
+  if (!form || form.dataset.raeInitialized === 'true') return;
 
-  if (!form) return;
+  form.dataset.raeInitialized = 'true';
 
   const dateInput = form.querySelector('input[name="fecha"]');
+  const personalViewport = form.querySelector('.rae-personal-viewport');
   const personCards = Array.from(form.querySelectorAll('.rae-person-card'));
   const noPersonalDate = form.querySelector('.rae-no-personal-date');
   const prevButton = form.querySelector('.rae-carousel-prev');
@@ -11,8 +12,10 @@ document.addEventListener('DOMContentLoaded', function () {
   let carouselPage = 0;
 
   function getCardsPerPage() {
-    if (window.matchMedia('(max-width: 640px)').matches) return 1;
-    if (window.matchMedia('(max-width: 900px)').matches) return 2;
+    const viewportWidth = personalViewport ? personalViewport.getBoundingClientRect().width : window.innerWidth;
+
+    if (viewportWidth < 700) return 1;
+    if (viewportWidth < 980) return 2;
 
     return 4;
   }
@@ -25,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const visibleCards = getVisibleCards();
     const cardsPerPage = getCardsPerPage();
     const maxPage = Math.max(0, Math.ceil(visibleCards.length / cardsPerPage) - 1);
-    const shouldDisableArrows = visibleCards.length <= 4;
+    const shouldDisableArrows = visibleCards.length <= cardsPerPage;
 
     carouselPage = Math.min(carouselPage, maxPage);
 
@@ -111,12 +114,14 @@ document.addEventListener('DOMContentLoaded', function () {
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
-    const msg = document.getElementById('rae-msg');
+    const msg = form.querySelector('#rae-msg');
     const data = new FormData(form);
 
     data.append('action', 'rae_guardar_reserva');
 
-    msg.innerText = 'Guardando reserva...';
+    if (msg) {
+      msg.innerText = 'Guardando reserva...';
+    }
 
     fetch(rae_ajax.ajax_url, {
       method: 'POST',
@@ -124,7 +129,9 @@ document.addEventListener('DOMContentLoaded', function () {
     })
       .then(response => response.json())
       .then(result => {
-        msg.innerText = result.data;
+        if (msg) {
+          msg.innerText = result.data;
+        }
 
         if (result.success) {
           form.reset();
@@ -132,7 +139,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       })
       .catch(() => {
-        msg.innerText = 'Ocurrió un error al enviar la reserva.';
+        if (msg) {
+          msg.innerText = 'Ocurrió un error al enviar la reserva.';
+        }
       });
   });
+}
+
+function raeInitReservationForms(root) {
+  const scope = root || document;
+  const forms = scope.querySelectorAll ? scope.querySelectorAll('.rae-form') : [];
+
+  if (scope.matches && scope.matches('.rae-form')) {
+    raeInitReservationForm(scope);
+  }
+
+  forms.forEach(raeInitReservationForm);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  raeInitReservationForms(document);
 });
+
+window.addEventListener('load', function () {
+  raeInitReservationForms(document);
+});
+
+function raeRegisterElementorReservationHook() {
+  if (!window.elementorFrontend || !window.elementorFrontend.hooks) return;
+  if (window.raeReservationElementorHookRegistered) return;
+
+  window.raeReservationElementorHookRegistered = true;
+
+  window.elementorFrontend.hooks.addAction('frontend/element_ready/reserva_aseo.default', function ($scope) {
+    const scope = $scope && $scope[0] ? $scope[0] : document;
+
+    raeInitReservationForms(scope);
+  });
+}
+
+raeRegisterElementorReservationHook();
+window.addEventListener('elementor/frontend/init', raeRegisterElementorReservationHook);

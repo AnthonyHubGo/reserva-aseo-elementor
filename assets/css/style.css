@@ -135,6 +135,10 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
+.rae-person-card[hidden] {
+  display: none !important;
+}
+
 .rae-person-card input[type="radio"] {
   position: absolute;
   width: 1px;

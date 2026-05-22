@@ -22,6 +22,14 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
     return ['general'];
   }
 
+  public function get_style_depends() {
+    return ['rae-css'];
+  }
+
+  public function get_script_depends() {
+    return ['rae-js'];
+  }
+
   protected function render() {
     $personal = get_posts([
       'post_type' => 'personal_aseo',
