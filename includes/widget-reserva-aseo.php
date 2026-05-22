@@ -47,13 +47,14 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
     <form id="rae-form" class="rae-form">
       <input type="text" name="nombre" placeholder="Nombre completo" required>
       <input type="email" name="email" placeholder="Correo electrónico" required>
+      <input type="tel" name="telefono" placeholder="Número de teléfono de contacto" required>
       <input type="date" name="fecha" required>
 
       <select name="jornada" required>
         <option value="">Selecciona jornada</option>
         <option value="manana">Mañana</option>
         <option value="tarde">Tarde</option>
-        <option value="completa">Día completa</option>
+        <option value="completa">Jornada Completa</option>
       </select>
 
       <p><strong>Elige la persona para tu servicio:</strong></p>

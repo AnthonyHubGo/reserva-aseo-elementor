@@ -6,7 +6,7 @@ function rae_email_nombre_jornada($jornada) {
   $jornadas = [
     'manana' => 'Mañana',
     'tarde' => 'Tarde',
-    'completa' => 'Día completa',
+    'completa' => 'Jornada Completa',
   ];
 
   return $jornadas[$jornada] ?? $jornada;
@@ -117,6 +117,7 @@ function rae_email_cliente_rows($reserva) {
   return [
     rae_email_row('Nombre', $reserva->cliente_nombre ?? ''),
     rae_email_row('Correo electrónico', $reserva->cliente_email ?? ''),
+    rae_email_row('Teléfono de contacto', $reserva->cliente_telefono ?? ''),
     rae_email_row('Ciudad', $reserva->cliente_ciudad ?? ''),
     rae_email_row('Barrio', $reserva->cliente_barrio ?? ''),
     rae_email_row('Dirección', $reserva->cliente_direccion ?? ''),

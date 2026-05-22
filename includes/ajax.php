@@ -12,6 +12,7 @@ function rae_guardar_reserva() {
 
   $nombre = sanitize_text_field(wp_unslash($_POST['nombre'] ?? ''));
   $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
+  $telefono = sanitize_text_field(wp_unslash($_POST['telefono'] ?? ''));
   $persona_id = absint(wp_unslash($_POST['persona_id'] ?? 0));
   $fecha = sanitize_text_field(wp_unslash($_POST['fecha'] ?? ''));
   $jornada = sanitize_text_field(wp_unslash($_POST['jornada'] ?? ''));
@@ -21,12 +22,16 @@ function rae_guardar_reserva() {
   $casa = sanitize_text_field(wp_unslash($_POST['casa'] ?? ''));
   $jornadas_permitidas = ['manana', 'tarde', 'completa'];
 
-  if (!$nombre || !$email || !$persona_id || !$fecha || !$jornada || !$ciudad || !$barrio || !$direccion || !$casa) {
+  if (!$nombre || !$email || !$telefono || !$persona_id || !$fecha || !$jornada || !$ciudad || !$barrio || !$direccion || !$casa) {
     wp_send_json_error('Todos los campos son obligatorios.');
   }
 
   if (!is_email($email)) {
     wp_send_json_error('El correo electrónico no es válido.');
+  }
+
+  if (!preg_match('/^[0-9+\-\s()]{7,30}$/', $telefono)) {
+    wp_send_json_error('El número de teléfono no es válido.');
   }
 
   if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
@@ -69,6 +74,7 @@ function rae_guardar_reserva() {
     [
       'cliente_nombre' => $nombre,
       'cliente_email' => $email,
+      'cliente_telefono' => $telefono,
       'persona_id' => $persona_id,
       'fecha' => $fecha,
       'jornada' => $jornada,
@@ -78,7 +84,7 @@ function rae_guardar_reserva() {
       'cliente_casa' => $casa,
       'estado' => 'pendiente',
     ],
-    ['%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
+    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
   );
 
   if (!$insertado) {
@@ -89,6 +95,7 @@ function rae_guardar_reserva() {
     rae_enviar_email_reserva_creada((object) [
       'cliente_nombre' => $nombre,
       'cliente_email' => $email,
+      'cliente_telefono' => $telefono,
       'cliente_ciudad' => $ciudad,
       'cliente_barrio' => $barrio,
       'cliente_direccion' => $direccion,

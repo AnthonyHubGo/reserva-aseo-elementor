@@ -276,7 +276,7 @@ function rae_render_admin_reservas() {
         <option value="">Todas las jornadas</option>
         <option value="manana" <?php selected($jornada, 'manana'); ?>>Mañana</option>
         <option value="tarde" <?php selected($jornada, 'tarde'); ?>>Tarde</option>
-        <option value="completa" <?php selected($jornada, 'completa'); ?>>Día completa</option>
+        <option value="completa" <?php selected($jornada, 'completa'); ?>>Jornada Completa</option>
       </select>
 
       <select name="estado">
@@ -685,7 +685,7 @@ function rae_nombre_jornada($jornada) {
   $jornadas = [
     'manana' => 'Mañana',
     'tarde' => 'Tarde',
-    'completa' => 'Día completa',
+    'completa' => 'Jornada Completa',
   ];
 
   return $jornadas[$jornada] ?? $jornada;

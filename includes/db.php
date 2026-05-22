@@ -14,6 +14,7 @@ class RAE_DB {
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       cliente_nombre VARCHAR(100) NOT NULL,
       cliente_email VARCHAR(100) NOT NULL,
+      cliente_telefono VARCHAR(30) NOT NULL DEFAULT '',
       persona_id BIGINT UNSIGNED NOT NULL,
       fecha DATE NOT NULL,
       jornada VARCHAR(20) NOT NULL,
