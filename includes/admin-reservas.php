@@ -38,15 +38,17 @@ add_action('admin_init', function () {
     );
 
     if ($reserva) {
-      $wpdb->update(
-        $table,
-        ['estado' => 'cancelada'],
-        ['id' => $reserva_id],
-        ['%s'],
-        ['%d']
-      );
+      if ($reserva->estado !== 'cancelada') {
+        $wpdb->update(
+          $table,
+          ['estado' => 'cancelada'],
+          ['id' => $reserva_id],
+          ['%s'],
+          ['%d']
+        );
 
-      rae_enviar_email_estado_reserva($reserva, 'cancelada');
+        rae_enviar_email_estado_reserva($reserva, 'cancelada');
+      }
 
       $wpdb->delete(
         $table,
@@ -264,6 +266,9 @@ function rae_render_admin_reservas() {
             $direccion = rae_valor_reserva_o_default($reserva->cliente_direccion ?? '');
             $casa = rae_valor_reserva_o_default($reserva->cliente_casa ?? '');
             $direccion_detalle_id = 'rae-direccion-reserva-' . absint($reserva->id);
+            $mensaje_eliminar = $reserva->estado === 'cancelada'
+              ? 'Estas seguro de que quieres eliminar esta reserva? Esto eliminará su registro y no podrás revertir esta acción'
+              : 'Estas seguro de que quieres eliminar esta reserva? Si la eliminas se cancelará automaticamente y le llegará un mensaje al cliente de que fue cancelada su reserva';
             ?>
             <tr>
               <td><?php echo esc_html($reserva->cliente_nombre); ?></td>
@@ -353,7 +358,7 @@ function rae_render_admin_reservas() {
                 <div id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-delete-reserva-modal" hidden>
                   <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">
                     <h2 id="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">Eliminar reserva</h2>
-                    <p>Estas seguro de que quieres eliminar esta reserva? Si la eliminas se cancelará automaticamente y le llegará un mensaje al cliente de que fue cancelada su reserva</p>
+                    <p><?php echo esc_html($mensaje_eliminar); ?></p>
 
                     <div class="rae-delete-reserva-actions">
                       <form method="post">
