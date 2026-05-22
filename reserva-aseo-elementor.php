@@ -35,14 +35,14 @@ function rae_register_reserva_assets() {
     'rae-css',
     RAE_URL . 'assets/css/style.css',
     [],
-    '1.0.1'
+    '1.0.2'
   );
 
   wp_register_script(
     'rae-js',
     RAE_URL . 'assets/js/app.js',
     [],
-    '1.0.1',
+    '1.0.2',
     true
   );
 

@@ -269,11 +269,35 @@
   }
 
   .rae-personal-carousel {
-    grid-template-columns: 36px minmax(0, 1fr) 36px;
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    gap: 6px;
   }
 
   .rae-personal-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .rae-person-card {
+    gap: 8px;
+    min-height: 150px;
+    padding: 10px 8px;
+    border-radius: 10px;
+  }
+
+  .rae-person-card span {
+    font-size: 14px;
+  }
+
+  .rae-person-card:has(input[type="radio"]:checked)::after {
+    top: 6px;
+    right: 6px;
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .rae-person-photo {
+    width: min(100%, 92px);
   }
 
   .rae-address-fields {
@@ -281,8 +305,8 @@
   }
 
   .rae-carousel-arrow {
-    width: 36px;
-    height: 36px;
-    font-size: 26px;
+    width: 32px;
+    height: 32px;
+    font-size: 24px;
   }
 }

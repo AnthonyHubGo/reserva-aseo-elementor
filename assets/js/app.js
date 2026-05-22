@@ -14,7 +14,6 @@ function raeInitReservationForm(form) {
   function getCardsPerPage() {
     const viewportWidth = personalViewport ? personalViewport.getBoundingClientRect().width : window.innerWidth;
 
-    if (viewportWidth < 700) return 1;
     if (viewportWidth < 980) return 2;
 
     return 4;
