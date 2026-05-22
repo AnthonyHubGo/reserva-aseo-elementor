@@ -85,38 +85,20 @@ function rae_guardar_reserva() {
     wp_send_json_error('No se pudo guardar la reserva.');
   }
 
-  $persona_nombre = get_the_title($persona_id);
-  $jornada_nombre = rae_nombre_jornada_email($jornada);
-  $asunto = 'Reserva recibida correctamente';
-  $mensaje = "Hola {$nombre},
-
-Hemos recibido tu solicitud de reserva.
-
-Detalles:
-Persona seleccionada: {$persona_nombre}
-Fecha: {$fecha}
-Jornada: {$jornada_nombre}
-Ciudad: {$ciudad}
-Barrio: {$barrio}
-Dirección: {$direccion}
-Casa: {$casa}
-Estado: Pendiente
-
-Te notificaremos cuando el administrador confirme o cancele tu reserva.
-
-Gracias.";
-
-  wp_mail($email, $asunto, $mensaje);
+  if (function_exists('rae_enviar_email_reserva_creada')) {
+    rae_enviar_email_reserva_creada((object) [
+      'cliente_nombre' => $nombre,
+      'cliente_email' => $email,
+      'cliente_ciudad' => $ciudad,
+      'cliente_barrio' => $barrio,
+      'cliente_direccion' => $direccion,
+      'cliente_casa' => $casa,
+      'persona_id' => $persona_id,
+      'fecha' => $fecha,
+      'jornada' => $jornada,
+      'estado' => 'pendiente',
+    ]);
+  }
 
   wp_send_json_success('Reserva creada correctamente.');
-}
-
-function rae_nombre_jornada_email($jornada) {
-  $jornadas = [
-    'manana' => 'Mañana',
-    'tarde' => 'Tarde',
-    'completa' => 'Día completa',
-  ];
-
-  return $jornadas[$jornada] ?? $jornada;
 }

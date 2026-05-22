@@ -467,27 +467,11 @@ function rae_nombre_jornada($jornada) {
 }
 
 function rae_enviar_email_estado_reserva($reserva, $nuevo_estado) {
-  if (!$reserva || !is_email($reserva->cliente_email)) {
-    return;
+  if (function_exists('rae_enviar_email_reserva_estado')) {
+    return rae_enviar_email_reserva_estado($reserva, $nuevo_estado);
   }
 
-  $persona_nombre = get_the_title($reserva->persona_id);
-  $jornada_nombre = rae_nombre_jornada($reserva->jornada);
-  $estado_nombre = ucfirst($nuevo_estado);
-  $asunto = 'Actualización de tu reserva';
-  $mensaje = "Hola {$reserva->cliente_nombre},
-
-Tu reserva ha cambiado de estado.
-
-Detalles:
-Persona seleccionada: {$persona_nombre}
-Fecha: {$reserva->fecha}
-Jornada: {$jornada_nombre}
-Nuevo estado: {$estado_nombre}
-
-Gracias.";
-
-  wp_mail($reserva->cliente_email, $asunto, $mensaje);
+  return false;
 }
 
 function rae_fecha_valida($fecha) {

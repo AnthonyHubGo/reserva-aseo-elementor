@@ -16,6 +16,7 @@ require_once RAE_PATH . 'includes/db.php';
 require_once RAE_PATH . 'includes/activator.php';
 require_once RAE_PATH . 'includes/personal-cpt.php';
 require_once RAE_PATH . 'includes/elementor-widget.php';
+require_once RAE_PATH . 'includes/email-templates.php';
 require_once RAE_PATH . 'includes/ajax.php';
 require_once RAE_PATH . 'includes/admin-reservas.php';
 
