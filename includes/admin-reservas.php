@@ -298,6 +298,7 @@ function rae_render_admin_reservas() {
         <tr>
           <th>Cliente</th>
           <th>Email</th>
+          <th>Teléfono</th>
           <th>Dirección</th>
           <th>Persona</th>
           <th>Fecha</th>
@@ -311,11 +312,12 @@ function rae_render_admin_reservas() {
       <tbody>
         <?php if (empty($reservas)): ?>
           <tr>
-            <td colspan="9">No hay reservas con estos filtros.</td>
+            <td colspan="10">No hay reservas con estos filtros.</td>
           </tr>
         <?php else: ?>
           <?php foreach ($reservas as $reserva): ?>
             <?php
+            $telefono = rae_valor_reserva_o_default($reserva->cliente_telefono ?? '');
             $ciudad = rae_valor_reserva_o_default($reserva->cliente_ciudad ?? '');
             $barrio = rae_valor_reserva_o_default($reserva->cliente_barrio ?? '');
             $direccion = rae_valor_reserva_o_default($reserva->cliente_direccion ?? '');
@@ -328,6 +330,7 @@ function rae_render_admin_reservas() {
             <tr>
               <td><?php echo esc_html($reserva->cliente_nombre); ?></td>
               <td><?php echo esc_html($reserva->cliente_email); ?></td>
+              <td><?php echo esc_html($telefono); ?></td>
               <td>
                 <div class="rae-address-summary">
                   <strong><?php echo esc_html($ciudad); ?></strong>
@@ -346,6 +349,10 @@ function rae_render_admin_reservas() {
 
                 <div id="<?php echo esc_attr($direccion_detalle_id); ?>" class="rae-address-details" hidden>
                   <dl>
+                    <div>
+                      <dt>Teléfono de contacto</dt>
+                      <dd><?php echo esc_html($telefono); ?></dd>
+                    </div>
                     <div>
                       <dt>Ciudad</dt>
                       <dd><?php echo esc_html($ciudad); ?></dd>
