@@ -22,6 +22,14 @@ function rae_email_nombre_estado($estado) {
   return $estados[$estado] ?? ucfirst((string) $estado);
 }
 
+function rae_email_asunto_estado($estado) {
+  if ($estado === 'pendiente') {
+    return 'Tu reserva con SAT esta pendiente';
+  }
+
+  return 'Tu reserva con SAT ha sido ' . strtolower(rae_email_nombre_estado($estado));
+}
+
 function rae_email_headers() {
   return ['Content-Type: text/html; charset=UTF-8'];
 }
@@ -48,9 +56,15 @@ function rae_email_template($heading, $intro, $cliente_rows, $reserva_rows, $foo
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      body, table, td, h1, h2, p, div {
+        font-family: "Nunito", Arial, sans-serif !important;
+      }
+    </style>
   </head>
-  <body style="margin: 0; padding: 0; background: #f4fbfc; font-family: Nunito, Arial, sans-serif; color: #273b44;">
-    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: #f4fbfc; padding: 28px 12px;">
+  <body style="margin: 0; padding: 0; background: #f4fbfc; font-family: &quot;Nunito&quot;, Arial, sans-serif; color: #273b44;">
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: #f4fbfc; padding: 28px 12px; font-family: &quot;Nunito&quot;, Arial, sans-serif;">
       <tr>
         <td align="center">
           <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width: 640px; border-collapse: collapse;">
@@ -107,7 +121,7 @@ function rae_enviar_email_reserva_creada($reserva) {
     return false;
   }
 
-  $asunto = 'Hemos recibido tu solicitud de reserva';
+  $asunto = rae_email_asunto_estado('pendiente');
   $intro = sprintf(
     'Hola %s,<br><br>Gracias por reservar con SAT.<br><br>Hemos recibido tu solicitud de servicio de aseo doméstico. Tu reserva se encuentra en estado pendiente mientras nuestro equipo valida la disponibilidad y confirma los detalles del servicio.<br><br>Te enviaremos una nueva notificación cuando tu reserva sea confirmada o cancelada.',
     esc_html($reserva->cliente_nombre)
@@ -129,7 +143,7 @@ function rae_enviar_email_reserva_estado($reserva, $nuevo_estado) {
   }
 
   $estado_label = rae_email_nombre_estado($nuevo_estado);
-  $asunto = 'Actualización del estado de tu reserva';
+  $asunto = rae_email_asunto_estado($nuevo_estado);
   $intro = sprintf(
     'Hola %s,<br><br>Te informamos que el estado de tu reserva ha sido actualizado.',
     esc_html($reserva->cliente_nombre)
