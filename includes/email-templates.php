@@ -125,12 +125,20 @@ function rae_email_cliente_rows($reserva) {
 }
 
 function rae_email_reserva_rows($reserva, $estado_label, $estado_field_label = 'Estado de la reserva') {
-  return [
+  $rows = [
     rae_email_row('Persona seleccionada', get_the_title(absint($reserva->persona_id ?? 0))),
     rae_email_row('Fecha del servicio', $reserva->fecha ?? ''),
     rae_email_row('Jornada', rae_email_nombre_jornada($reserva->jornada ?? '')),
     rae_email_row($estado_field_label, $estado_label),
   ];
+
+  $motivo_cancelacion = trim((string) ($reserva->cancelacion_motivo ?? ''));
+
+  if (strtolower((string) $estado_label) === 'cancelada' && $motivo_cancelacion !== '') {
+    $rows[] = rae_email_row('Motivo de cancelación', $motivo_cancelacion);
+  }
+
+  return $rows;
 }
 
 function rae_enviar_email_reserva_creada($reserva) {
