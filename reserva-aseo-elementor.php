@@ -42,14 +42,14 @@ function rae_register_reserva_assets() {
     'rae-css',
     RAE_URL . 'assets/css/style.css',
     ['rae-nunito'],
-    '1.0.4'
+    '1.0.6'
   );
 
   wp_register_script(
     'rae-js',
     RAE_URL . 'assets/js/app.js',
     [],
-    '1.0.4',
+    '1.0.6',
     true
   );
 
