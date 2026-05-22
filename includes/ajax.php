@@ -43,6 +43,16 @@ function rae_guardar_reserva() {
     wp_send_json_error('La fecha no es válida.');
   }
 
+  $hoy = wp_date('Y-m-d');
+
+  if ($fecha < $hoy) {
+    wp_send_json_error('No puedes reservar una fecha anterior al día actual.');
+  }
+
+  if (function_exists('rae_es_festivo_colombia') && rae_es_festivo_colombia($fecha)) {
+    wp_send_json_error('No puedes reservar en días festivos de Colombia.');
+  }
+
   if (!in_array($jornada, $jornadas_permitidas, true)) {
     wp_send_json_error('La jornada no es válida.');
   }

@@ -17,6 +17,7 @@ require_once RAE_PATH . 'includes/activator.php';
 require_once RAE_PATH . 'includes/personal-cpt.php';
 require_once RAE_PATH . 'includes/elementor-widget.php';
 require_once RAE_PATH . 'includes/email-templates.php';
+require_once RAE_PATH . 'includes/holidays.php';
 require_once RAE_PATH . 'includes/ajax.php';
 require_once RAE_PATH . 'includes/admin-reservas.php';
 require_once RAE_PATH . 'includes/admin-settings.php';
@@ -41,22 +42,47 @@ function rae_register_reserva_assets() {
   );
 
   wp_register_style(
+    'rae-flatpickr',
+    'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
+    [],
+    '4.6.13'
+  );
+
+  wp_register_style(
     'rae-css',
     RAE_URL . 'assets/css/style.css',
-    ['rae-nunito'],
-    '1.0.6'
+    ['rae-nunito', 'rae-flatpickr'],
+    '1.0.8'
+  );
+
+  wp_register_script(
+    'rae-flatpickr',
+    'https://cdn.jsdelivr.net/npm/flatpickr',
+    [],
+    '4.6.13',
+    true
   );
 
   wp_register_script(
     'rae-js',
     RAE_URL . 'assets/js/app.js',
-    [],
-    '1.0.6',
+    ['rae-flatpickr'],
+    '1.0.8',
     true
   );
 
+  $today = wp_date('Y-m-d');
+  $current_year = (int) wp_date('Y');
+
   wp_localize_script('rae-js', 'rae_ajax', [
-    'ajax_url' => admin_url('admin-ajax.php')
+    'ajax_url' => admin_url('admin-ajax.php'),
+  ]);
+
+  wp_localize_script('rae-js', 'raeReservaConfig', [
+    'today' => $today,
+    'holidays' => function_exists('rae_festivos_colombia_rango')
+      ? rae_festivos_colombia_rango($current_year, $current_year + 5)
+      : [],
   ]);
 }
 

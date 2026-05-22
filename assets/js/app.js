@@ -9,7 +9,26 @@ function raeInitReservationForm(form) {
   const noPersonalDate = form.querySelector('.rae-no-personal-date');
   const prevButton = form.querySelector('.rae-carousel-prev');
   const nextButton = form.querySelector('.rae-carousel-next');
+  const dateConfig = window.raeReservaConfig || {};
+  const today = dateConfig.today || new Date().toISOString().slice(0, 10);
+  const holidays = dateConfig.holidays || {};
   let carouselPage = 0;
+
+  function isInvalidReservationDate(date) {
+    if (!date) {
+      return 'Selecciona una fecha para la reserva.';
+    }
+
+    if (date < today) {
+      return 'No puedes reservar una fecha anterior al día actual.';
+    }
+
+    if (holidays[date]) {
+      return 'No puedes reservar en días festivos de Colombia.';
+    }
+
+    return '';
+  }
 
   function getCardsPerPage() {
     const viewportWidth = personalViewport ? personalViewport.getBoundingClientRect().width : window.innerWidth;
@@ -90,6 +109,16 @@ function raeInitReservationForm(form) {
   }
 
   if (dateInput) {
+    if (window.flatpickr) {
+      window.flatpickr(dateInput, {
+        dateFormat: 'Y-m-d',
+        minDate: today,
+        disable: Object.keys(holidays),
+      });
+    } else {
+      dateInput.setAttribute('min', today);
+    }
+
     dateInput.addEventListener('change', updateAvailableCards);
     updateAvailableCards();
   }
@@ -115,6 +144,15 @@ function raeInitReservationForm(form) {
 
     const msg = form.querySelector('#rae-msg');
     const data = new FormData(form);
+    const dateError = isInvalidReservationDate(data.get('fecha'));
+
+    if (dateError) {
+      if (msg) {
+        msg.innerText = dateError;
+      }
+
+      return;
+    }
 
     data.append('action', 'rae_guardar_reserva');
 

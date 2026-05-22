@@ -48,7 +48,9 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
       <input type="text" name="nombre" placeholder="Nombre completo" required>
       <input type="email" name="email" placeholder="Correo electrónico" required>
       <input type="tel" name="telefono" placeholder="Número de teléfono de contacto" required>
-      <input type="date" name="fecha" required>
+      <span class="rae-date-field">
+        <input type="text" name="fecha" placeholder="Selecciona la fecha" required>
+      </span>
 
       <select name="jornada" required>
         <option value="">Selecciona jornada</option>
