@@ -241,6 +241,7 @@ function rae_render_admin_reservas() {
         <tr>
           <th>Cliente</th>
           <th>Email</th>
+          <th>Dirección</th>
           <th>Persona</th>
           <th>Fecha</th>
           <th>Jornada</th>
@@ -253,13 +254,57 @@ function rae_render_admin_reservas() {
       <tbody>
         <?php if (empty($reservas)): ?>
           <tr>
-            <td colspan="8">No hay reservas con estos filtros.</td>
+            <td colspan="9">No hay reservas con estos filtros.</td>
           </tr>
         <?php else: ?>
           <?php foreach ($reservas as $reserva): ?>
+            <?php
+            $ciudad = rae_valor_reserva_o_default($reserva->cliente_ciudad ?? '');
+            $barrio = rae_valor_reserva_o_default($reserva->cliente_barrio ?? '');
+            $direccion = rae_valor_reserva_o_default($reserva->cliente_direccion ?? '');
+            $casa = rae_valor_reserva_o_default($reserva->cliente_casa ?? '');
+            $direccion_detalle_id = 'rae-direccion-reserva-' . absint($reserva->id);
+            ?>
             <tr>
               <td><?php echo esc_html($reserva->cliente_nombre); ?></td>
               <td><?php echo esc_html($reserva->cliente_email); ?></td>
+              <td>
+                <div class="rae-address-summary">
+                  <strong><?php echo esc_html($ciudad); ?></strong>
+                  <span><?php echo esc_html($barrio); ?></span>
+                </div>
+
+                <button
+                  type="button"
+                  class="button-link rae-toggle-address"
+                  aria-expanded="false"
+                  aria-controls="<?php echo esc_attr($direccion_detalle_id); ?>"
+                  data-target="<?php echo esc_attr($direccion_detalle_id); ?>"
+                >
+                  Ver dirección
+                </button>
+
+                <div id="<?php echo esc_attr($direccion_detalle_id); ?>" class="rae-address-details" hidden>
+                  <dl>
+                    <div>
+                      <dt>Ciudad</dt>
+                      <dd><?php echo esc_html($ciudad); ?></dd>
+                    </div>
+                    <div>
+                      <dt>Barrio</dt>
+                      <dd><?php echo esc_html($barrio); ?></dd>
+                    </div>
+                    <div>
+                      <dt>Dirección</dt>
+                      <dd><?php echo esc_html($direccion); ?></dd>
+                    </div>
+                    <div>
+                      <dt>Casa / Apartamento</dt>
+                      <dd><?php echo esc_html($casa); ?></dd>
+                    </div>
+                  </dl>
+                </div>
+              </td>
               <td><?php echo esc_html(get_the_title($reserva->persona_id)); ?></td>
               <td><?php echo esc_html($reserva->fecha); ?></td>
               <td><?php echo esc_html(rae_nombre_jornada($reserva->jornada)); ?></td>
@@ -332,6 +377,55 @@ function rae_render_admin_reservas() {
   </div>
 
   <style>
+    .rae-address-summary {
+      display: grid;
+      gap: 2px;
+      min-width: 150px;
+      color: #1d2327;
+    }
+
+    .rae-address-summary span {
+      color: #646970;
+      font-size: 12px;
+    }
+
+    .rae-toggle-address {
+      margin-top: 6px;
+      font-size: 12px;
+      text-decoration: none;
+    }
+
+    .rae-address-details {
+      width: min(280px, 100%);
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid #dcdcde;
+      border-radius: 6px;
+      background: #f6f7f7;
+    }
+
+    .rae-address-details dl {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .rae-address-details dl > div {
+      display: grid;
+      gap: 2px;
+    }
+
+    .rae-address-details dt {
+      color: #1d2327;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .rae-address-details dd {
+      margin: 0;
+      color: #50575e;
+    }
+
     .rae-reserva-actions {
       display: flex;
       gap: 8px;
@@ -450,6 +544,20 @@ function rae_render_admin_reservas() {
       if (event.target.classList.contains('rae-delete-reserva-modal')) {
         event.target.hidden = true;
       }
+
+      const addressButton = event.target.closest('.rae-toggle-address');
+
+      if (addressButton) {
+        const details = document.getElementById(addressButton.dataset.target);
+
+        if (details) {
+          const isExpanded = addressButton.getAttribute('aria-expanded') === 'true';
+
+          details.hidden = isExpanded;
+          addressButton.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+          addressButton.textContent = isExpanded ? 'Ver dirección' : 'Ocultar dirección';
+        }
+      }
     });
   </script>
 
@@ -464,6 +572,12 @@ function rae_nombre_jornada($jornada) {
   ];
 
   return $jornadas[$jornada] ?? $jornada;
+}
+
+function rae_valor_reserva_o_default($valor) {
+  $valor = trim((string) $valor);
+
+  return $valor !== '' ? $valor : 'No especificado';
 }
 
 function rae_enviar_email_estado_reserva($reserva, $nuevo_estado) {
