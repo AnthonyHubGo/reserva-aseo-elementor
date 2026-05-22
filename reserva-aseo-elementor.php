@@ -13,6 +13,7 @@ define('RAE_URL', plugin_dir_url(__FILE__));
 define('RAE_DB_VERSION', '1.1.1');
 
 require_once RAE_PATH . 'includes/db.php';
+require_once RAE_PATH . 'includes/roles.php';
 require_once RAE_PATH . 'includes/activator.php';
 require_once RAE_PATH . 'includes/personal-cpt.php';
 require_once RAE_PATH . 'includes/elementor-widget.php';
@@ -25,6 +26,10 @@ require_once RAE_PATH . 'includes/admin-settings.php';
 register_activation_hook(__FILE__, ['RAE_Activator', 'activate']);
 
 add_action('plugins_loaded', function () {
+  if (function_exists('rae_registrar_roles_y_capabilities')) {
+    rae_registrar_roles_y_capabilities();
+  }
+
   if (get_option('rae_db_version') === RAE_DB_VERSION) {
     return;
   }

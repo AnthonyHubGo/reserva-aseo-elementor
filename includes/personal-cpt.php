@@ -20,6 +20,24 @@ add_action('init', function () {
     'show_ui' => true,
     'menu_icon' => 'dashicons-admin-users',
     'supports' => ['title', 'thumbnail'],
+    'capability_type' => ['personal_aseo', 'personal_aseos'],
+    'map_meta_cap' => true,
+    'capabilities' => [
+      'edit_post' => 'edit_personal_aseo',
+      'read_post' => 'read_personal_aseo',
+      'delete_post' => 'delete_personal_aseo',
+      'edit_posts' => 'edit_personal_aseos',
+      'edit_others_posts' => 'edit_others_personal_aseos',
+      'publish_posts' => 'publish_personal_aseos',
+      'read_private_posts' => 'read_private_personal_aseos',
+      'delete_posts' => 'delete_personal_aseos',
+      'delete_others_posts' => 'delete_others_personal_aseos',
+      'delete_published_posts' => 'delete_published_personal_aseos',
+      'delete_private_posts' => 'delete_private_personal_aseos',
+      'edit_published_posts' => 'edit_published_personal_aseos',
+      'edit_private_posts' => 'edit_private_personal_aseos',
+      'create_posts' => 'edit_personal_aseos',
+    ],
   ]);
 
 });

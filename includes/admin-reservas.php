@@ -6,7 +6,7 @@ add_action('admin_menu', function () {
   add_menu_page(
     'Reservas de Aseo',
     'Reservas de Aseo',
-    'manage_options',
+    'rae_view_reservas',
     'reservas-aseo',
     'rae_render_admin_reservas',
     'dashicons-calendar-alt',
@@ -22,7 +22,7 @@ add_action('admin_init', function () {
     isset($_POST['page'], $_POST['rae_action'], $_POST['reserva_id']) &&
     $_POST['page'] === 'reservas-aseo' &&
     $_POST['rae_action'] === 'cancelar' &&
-    current_user_can('manage_options')
+    current_user_can('rae_manage_reservas')
   ) {
     check_admin_referer('rae_cancelar_reserva_' . absint(wp_unslash($_POST['reserva_id'])));
 
@@ -67,7 +67,7 @@ add_action('admin_init', function () {
     isset($_POST['page'], $_POST['rae_action'], $_POST['reserva_id']) &&
     $_POST['page'] === 'reservas-aseo' &&
     $_POST['rae_action'] === 'eliminar' &&
-    current_user_can('manage_options')
+    current_user_can('rae_manage_reservas')
   ) {
     check_admin_referer('rae_eliminar_reserva_' . absint(wp_unslash($_POST['reserva_id'])));
 
@@ -116,7 +116,7 @@ add_action('admin_init', function () {
   if (
     !isset($_GET['page'], $_GET['rae_action'], $_GET['reserva_id']) ||
     $_GET['page'] !== 'reservas-aseo' ||
-    !current_user_can('manage_options')
+    !current_user_can('rae_manage_reservas')
   ) {
     return;
   }
@@ -169,11 +169,16 @@ add_action('admin_init', function () {
 });
 
 function rae_render_admin_reservas() {
+  if (!current_user_can('rae_view_reservas')) {
+    wp_die(esc_html__('No tienes permisos para acceder a esta página.', 'reserva-aseo-elementor'));
+  }
+
   global $wpdb;
 
   $table = $wpdb->prefix . 'reservas_aseo';
   $jornadas_permitidas = ['manana', 'tarde', 'completa'];
   $estados_permitidos = ['pendiente', 'confirmada', 'cancelada'];
+  $puede_gestionar_reservas = current_user_can('rae_manage_reservas');
 
   $persona_id = isset($_GET['persona_id']) ? absint(wp_unslash($_GET['persona_id'])) : 0;
   $fecha = isset($_GET['fecha']) ? sanitize_text_field(wp_unslash($_GET['fecha'])) : '';
@@ -378,94 +383,98 @@ function rae_render_admin_reservas() {
               <td><?php echo esc_html(ucfirst($reserva->estado)); ?></td>
               <td><?php echo esc_html($reserva->created_at); ?></td>
               <td>
-                <div class="rae-reserva-actions">
-                  <div class="rae-reserva-state-actions">
-                    <?php if ($reserva->estado !== 'confirmada'): ?>
-                      <a
-                        class="button button-primary"
-                        href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
-                          'page' => 'reservas-aseo',
-                          'rae_action' => 'confirmar',
-                          'reserva_id' => $reserva->id,
-                        ]), admin_url('admin.php'))); ?>"
-                      >
-                        Confirmar
-                      </a>
-                    <?php endif; ?>
+                <?php if ($puede_gestionar_reservas): ?>
+                  <div class="rae-reserva-actions">
+                    <div class="rae-reserva-state-actions">
+                      <?php if ($reserva->estado !== 'confirmada'): ?>
+                        <a
+                          class="button button-primary"
+                          href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
+                            'page' => 'reservas-aseo',
+                            'rae_action' => 'confirmar',
+                            'reserva_id' => $reserva->id,
+                          ]), admin_url('admin.php'))); ?>"
+                        >
+                          Confirmar
+                        </a>
+                      <?php endif; ?>
 
-                    <?php if ($reserva->estado !== 'cancelada'): ?>
-                      <button
-                        type="button"
-                        class="button"
-                        data-modal-id="rae-cancel-reserva-<?php echo esc_attr($reserva->id); ?>"
-                      >
-                        Cancelar
-                      </button>
-                    <?php endif; ?>
-                  </div>
-
-                  <button
-                    type="button"
-                    class="button rae-delete-reserva-button"
-                    data-modal-id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>"
-                    aria-label="Eliminar reserva"
-                  >
-                    <span class="dashicons dashicons-trash"></span>
-                  </button>
-                </div>
-
-                <?php if ($reserva->estado !== 'cancelada'): ?>
-                  <div id="rae-cancel-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-cancel-reserva-modal" hidden>
-                    <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-cancel-title-<?php echo esc_attr($reserva->id); ?>">
-                      <h2 id="rae-cancel-title-<?php echo esc_attr($reserva->id); ?>">Cancelar reserva</h2>
-                      <p>Indica el motivo de la cancelación. Este motivo será incluido en el correo que recibirá el cliente.</p>
-
-                      <form method="post">
-                        <input type="hidden" name="page" value="reservas-aseo">
-                        <input type="hidden" name="rae_action" value="cancelar">
-                        <input type="hidden" name="reserva_id" value="<?php echo esc_attr($reserva->id); ?>">
-                        <?php wp_nonce_field('rae_cancelar_reserva_' . absint($reserva->id)); ?>
-
-                        <label class="rae-cancel-reason-field">
-                          <span>Motivo de cancelación</span>
-                          <textarea name="motivo_cancelacion" rows="4" required></textarea>
-                        </label>
-
-                        <div class="rae-delete-reserva-actions">
-                          <button type="submit" class="button button-primary">Cancelar reserva</button>
-                          <button type="button" class="button rae-reserva-modal-close">Volver</button>
-                        </div>
-                      </form>
+                      <?php if ($reserva->estado !== 'cancelada'): ?>
+                        <button
+                          type="button"
+                          class="button"
+                          data-modal-id="rae-cancel-reserva-<?php echo esc_attr($reserva->id); ?>"
+                        >
+                          Cancelar
+                        </button>
+                      <?php endif; ?>
                     </div>
+
+                    <button
+                      type="button"
+                      class="button rae-delete-reserva-button"
+                      data-modal-id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>"
+                      aria-label="Eliminar reserva"
+                    >
+                      <span class="dashicons dashicons-trash"></span>
+                    </button>
                   </div>
-                <?php endif; ?>
 
-                <div id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-delete-reserva-modal" hidden>
-                  <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">
-                    <h2 id="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">Eliminar reserva</h2>
-                    <p><?php echo esc_html($mensaje_eliminar); ?></p>
+                  <?php if ($reserva->estado !== 'cancelada'): ?>
+                    <div id="rae-cancel-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-cancel-reserva-modal" hidden>
+                      <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-cancel-title-<?php echo esc_attr($reserva->id); ?>">
+                        <h2 id="rae-cancel-title-<?php echo esc_attr($reserva->id); ?>">Cancelar reserva</h2>
+                        <p>Indica el motivo de la cancelación. Este motivo será incluido en el correo que recibirá el cliente.</p>
 
-                    <div class="rae-delete-reserva-actions">
-                      <form method="post">
-                        <input type="hidden" name="page" value="reservas-aseo">
-                        <input type="hidden" name="rae_action" value="eliminar">
-                        <input type="hidden" name="reserva_id" value="<?php echo esc_attr($reserva->id); ?>">
-                        <?php wp_nonce_field('rae_eliminar_reserva_' . absint($reserva->id)); ?>
+                        <form method="post">
+                          <input type="hidden" name="page" value="reservas-aseo">
+                          <input type="hidden" name="rae_action" value="cancelar">
+                          <input type="hidden" name="reserva_id" value="<?php echo esc_attr($reserva->id); ?>">
+                          <?php wp_nonce_field('rae_cancelar_reserva_' . absint($reserva->id)); ?>
 
-                        <?php if ($reserva->estado !== 'cancelada'): ?>
                           <label class="rae-cancel-reason-field">
                             <span>Motivo de cancelación</span>
                             <textarea name="motivo_cancelacion" rows="4" required></textarea>
                           </label>
-                        <?php endif; ?>
 
-                        <button type="submit" class="button button-primary">Cancelar reserva</button>
-                      </form>
+                          <div class="rae-delete-reserva-actions">
+                            <button type="submit" class="button button-primary">Cancelar reserva</button>
+                            <button type="button" class="button rae-reserva-modal-close">Volver</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  <?php endif; ?>
 
-                      <button type="button" class="button rae-reserva-modal-close">Volver</button>
+                  <div id="rae-delete-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-delete-reserva-modal" hidden>
+                    <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">
+                      <h2 id="rae-delete-title-<?php echo esc_attr($reserva->id); ?>">Eliminar reserva</h2>
+                      <p><?php echo esc_html($mensaje_eliminar); ?></p>
+
+                      <div class="rae-delete-reserva-actions">
+                        <form method="post">
+                          <input type="hidden" name="page" value="reservas-aseo">
+                          <input type="hidden" name="rae_action" value="eliminar">
+                          <input type="hidden" name="reserva_id" value="<?php echo esc_attr($reserva->id); ?>">
+                          <?php wp_nonce_field('rae_eliminar_reserva_' . absint($reserva->id)); ?>
+
+                          <?php if ($reserva->estado !== 'cancelada'): ?>
+                            <label class="rae-cancel-reason-field">
+                              <span>Motivo de cancelación</span>
+                              <textarea name="motivo_cancelacion" rows="4" required></textarea>
+                            </label>
+                          <?php endif; ?>
+
+                          <button type="submit" class="button button-primary">Cancelar reserva</button>
+                        </form>
+
+                        <button type="button" class="button rae-reserva-modal-close">Volver</button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                <?php else: ?>
+                  <span aria-hidden="true">—</span>
+                <?php endif; ?>
               </td>
             </tr>
           <?php endforeach; ?>
