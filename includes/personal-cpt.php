@@ -335,11 +335,12 @@ function rae_obtener_ocupaciones_personal($post_id) {
   global $wpdb;
 
   $table = $wpdb->prefix . 'reservas_aseo';
+  $estados_bloqueantes = ['pendiente_pago', 'pagado', 'confirmada'];
+  $placeholders_estados = implode(', ', array_fill(0, count($estados_bloqueantes), '%s'));
   $reservas = $wpdb->get_results(
     $wpdb->prepare(
-      "SELECT fecha, jornada FROM $table WHERE persona_id = %d AND estado = %s",
-      $post_id,
-      'confirmada'
+      "SELECT fecha, jornada FROM $table WHERE persona_id = %d AND estado IN ($placeholders_estados)",
+      array_merge([$post_id], $estados_bloqueantes)
     )
   );
   $ocupaciones = [];

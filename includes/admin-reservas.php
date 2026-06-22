@@ -177,7 +177,7 @@ function rae_render_admin_reservas() {
 
   $table = $wpdb->prefix . 'reservas_aseo';
   $jornadas_permitidas = ['manana', 'tarde', 'completa'];
-  $estados_permitidos = ['pendiente', 'confirmada', 'cancelada'];
+  $estados_permitidos = ['pendiente', 'pendiente_pago', 'pagado', 'confirmada', 'rechazada', 'cancelada'];
   $puede_gestionar_reservas = current_user_can('rae_manage_reservas');
 
   $persona_id = isset($_GET['persona_id']) ? absint(wp_unslash($_GET['persona_id'])) : 0;
@@ -287,7 +287,10 @@ function rae_render_admin_reservas() {
       <select name="estado">
         <option value="">Todos los estados</option>
         <option value="pendiente" <?php selected($estado, 'pendiente'); ?>>Pendiente</option>
+        <option value="pendiente_pago" <?php selected($estado, 'pendiente_pago'); ?>>Pendiente de pago</option>
+        <option value="pagado" <?php selected($estado, 'pagado'); ?>>Pagado</option>
         <option value="confirmada" <?php selected($estado, 'confirmada'); ?>>Confirmada</option>
+        <option value="rechazada" <?php selected($estado, 'rechazada'); ?>>Rechazada</option>
         <option value="cancelada" <?php selected($estado, 'cancelada'); ?>>Cancelada</option>
       </select>
 
@@ -309,6 +312,7 @@ function rae_render_admin_reservas() {
           <th>Fecha</th>
           <th>Jornada</th>
           <th>Estado</th>
+          <th>Pago</th>
           <th>Creada</th>
           <th>Acciones</th>
         </tr>
@@ -317,7 +321,7 @@ function rae_render_admin_reservas() {
       <tbody>
         <?php if (empty($reservas)): ?>
           <tr>
-            <td colspan="10">No hay reservas con estos filtros.</td>
+            <td colspan="11">No hay reservas con estos filtros.</td>
           </tr>
         <?php else: ?>
           <?php foreach ($reservas as $reserva): ?>
@@ -380,7 +384,18 @@ function rae_render_admin_reservas() {
               <td><?php echo esc_html(get_the_title($reserva->persona_id)); ?></td>
               <td><?php echo esc_html($reserva->fecha); ?></td>
               <td><?php echo esc_html(rae_nombre_jornada($reserva->jornada)); ?></td>
-              <td><?php echo esc_html(ucfirst($reserva->estado)); ?></td>
+              <td><?php echo esc_html(rae_nombre_estado_reserva($reserva->estado)); ?></td>
+              <td>
+                <div class="rae-payment-summary">
+                  <strong><?php echo esc_html(rae_nombre_estado_pago($reserva->payment_status ?? '')); ?></strong>
+                  <?php if (!empty($reserva->payment_reference)): ?>
+                    <span>Ref: <?php echo esc_html($reserva->payment_reference); ?></span>
+                  <?php endif; ?>
+                  <?php if (!empty($reserva->wompi_transaction_id)): ?>
+                    <span>Wompi: <?php echo esc_html($reserva->wompi_transaction_id); ?></span>
+                  <?php endif; ?>
+                </div>
+              </td>
               <td><?php echo esc_html($reserva->created_at); ?></td>
               <td>
                 <?php if ($puede_gestionar_reservas): ?>
@@ -489,6 +504,17 @@ function rae_render_admin_reservas() {
       gap: 2px;
       min-width: 150px;
       color: #1d2327;
+    }
+
+    .rae-payment-summary {
+      display: grid;
+      gap: 2px;
+      min-width: 180px;
+    }
+
+    .rae-payment-summary span {
+      color: #646970;
+      font-size: 12px;
     }
 
     .rae-address-summary span {
@@ -705,6 +731,33 @@ function rae_nombre_jornada($jornada) {
   ];
 
   return $jornadas[$jornada] ?? $jornada;
+}
+
+function rae_nombre_estado_reserva($estado) {
+  $estados = [
+    'pendiente' => 'Pendiente',
+    'pendiente_pago' => 'Pendiente de pago',
+    'pagado' => 'Pagado',
+    'confirmada' => 'Confirmada',
+    'rechazada' => 'Rechazada',
+    'cancelada' => 'Cancelada',
+  ];
+
+  return $estados[$estado] ?? ucfirst((string) $estado);
+}
+
+function rae_nombre_estado_pago($estado) {
+  $estados = [
+    '' => 'Sin pago',
+    'pending' => 'Pendiente',
+    'pending_vobo' => 'Pendiente',
+    'approved' => 'Aprobado',
+    'declined' => 'Rechazado',
+    'voided' => 'Anulado',
+    'error' => 'Error',
+  ];
+
+  return $estados[strtolower((string) $estado)] ?? ucfirst((string) $estado);
 }
 
 function rae_valor_reserva_o_default($valor) {

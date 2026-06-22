@@ -15,7 +15,10 @@ function rae_email_nombre_jornada($jornada) {
 function rae_email_nombre_estado($estado) {
   $estados = [
     'pendiente' => 'Pendiente',
+    'pendiente_pago' => 'Pendiente de pago',
+    'pagado' => 'Pagado',
     'confirmada' => 'Confirmada',
+    'rechazada' => 'Rechazada',
     'cancelada' => 'Cancelada',
   ];
 
@@ -23,7 +26,7 @@ function rae_email_nombre_estado($estado) {
 }
 
 function rae_email_asunto_estado($estado) {
-  if ($estado === 'pendiente') {
+  if ($estado === 'pendiente' || $estado === 'pendiente_pago') {
     return 'Tu reserva con SAT esta pendiente';
   }
 
@@ -147,16 +150,16 @@ function rae_enviar_email_reserva_creada($reserva) {
     return false;
   }
 
-  $asunto = rae_email_asunto_estado('pendiente');
+  $asunto = rae_email_asunto_estado('pendiente_pago');
   $intro = sprintf(
-    'Hola %s,<br><br>Gracias por reservar con SAT.<br><br>Hemos recibido tu solicitud de servicio de aseo doméstico. Tu reserva se encuentra en estado pendiente mientras nuestro equipo valida la disponibilidad y confirma los detalles del servicio.<br><br>Te enviaremos una nueva notificación cuando tu reserva sea confirmada o cancelada.',
+    'Hola %s,<br><br>Gracias por reservar con SAT.<br><br>Hemos recibido tu solicitud de servicio de aseo doméstico. Tu reserva se encuentra pendiente de pago. Te enviaremos una nueva notificación cuando Wompi confirme el resultado del pago.',
     esc_html($reserva->cliente_nombre)
   );
   $mensaje = rae_email_template(
     'Hemos recibido tu solicitud de reserva',
     $intro,
     rae_email_cliente_rows($reserva),
-    rae_email_reserva_rows($reserva, 'Pendiente', 'Estado'),
+    rae_email_reserva_rows($reserva, 'Pendiente de pago', 'Estado'),
     'Gracias por confiar en SAT.'
   );
 
