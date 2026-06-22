@@ -10,6 +10,13 @@ function rae_guardar_reserva() {
 
   $table = $wpdb->prefix . 'reservas_aseo';
 
+  if (
+    !isset($_POST['nonce']) ||
+    !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'rae_guardar_reserva')
+  ) {
+    wp_send_json_error('No se pudo validar la solicitud.');
+  }
+
   $nombre = sanitize_text_field(wp_unslash($_POST['nombre'] ?? ''));
   $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
   $telefono = sanitize_text_field(wp_unslash($_POST['telefono'] ?? ''));
@@ -24,6 +31,10 @@ function rae_guardar_reserva() {
 
   if (!$nombre || !$email || !$telefono || !$persona_id || !$fecha || !$jornada || !$ciudad || !$barrio || !$direccion || !$casa) {
     wp_send_json_error('Todos los campos son obligatorios.');
+  }
+
+  if (mb_strlen($direccion) < 4 || mb_strlen($casa) < 4) {
+    wp_send_json_error('La dirección y la casa/apartamento deben tener al menos 4 caracteres.');
   }
 
   if (!is_email($email)) {
@@ -61,16 +72,22 @@ function rae_guardar_reserva() {
     wp_send_json_error('La persona seleccionada no está disponible para reservas.');
   }
 
+  if (!function_exists('rae_wompi_can_create_checkout') || !rae_wompi_can_create_checkout()) {
+    wp_send_json_error('La pasarela de pagos no está configurada correctamente.');
+  }
+
   $jornadas_conflicto = $jornada === 'completa'
     ? $jornadas_permitidas
     : [$jornada, 'completa'];
+  $estados_bloqueantes = ['pendiente', 'pendiente_pago', 'pagado', 'confirmada'];
 
   $placeholders_jornadas = implode(', ', array_fill(0, count($jornadas_conflicto), '%s'));
-  $parametros_conflicto = array_merge([$persona_id, $fecha], $jornadas_conflicto);
+  $placeholders_estados = implode(', ', array_fill(0, count($estados_bloqueantes), '%s'));
+  $parametros_conflicto = array_merge([$persona_id, $fecha], $jornadas_conflicto, $estados_bloqueantes);
 
   $existe = $wpdb->get_var(
     $wpdb->prepare(
-      "SELECT COUNT(*) FROM $table WHERE persona_id = %d AND fecha = %s AND jornada IN ($placeholders_jornadas)",
+      "SELECT COUNT(*) FROM $table WHERE persona_id = %d AND fecha = %s AND jornada IN ($placeholders_jornadas) AND estado IN ($placeholders_estados)",
       $parametros_conflicto
     )
   );
@@ -92,30 +109,57 @@ function rae_guardar_reserva() {
       'cliente_barrio' => $barrio,
       'cliente_direccion' => $direccion,
       'cliente_casa' => $casa,
-      'estado' => 'pendiente',
+      'estado' => 'pendiente_pago',
+      'payment_status' => 'pending',
+      'payment_gateway' => 'wompi',
     ],
-    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
+    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
   );
 
   if (!$insertado) {
     wp_send_json_error('No se pudo guardar la reserva.');
   }
 
-  if (function_exists('rae_enviar_email_reserva_creada')) {
-    rae_enviar_email_reserva_creada((object) [
-      'cliente_nombre' => $nombre,
-      'cliente_email' => $email,
-      'cliente_telefono' => $telefono,
-      'cliente_ciudad' => $ciudad,
-      'cliente_barrio' => $barrio,
-      'cliente_direccion' => $direccion,
-      'cliente_casa' => $casa,
-      'persona_id' => $persona_id,
-      'fecha' => $fecha,
-      'jornada' => $jornada,
-      'estado' => 'pendiente',
-    ]);
+  $reserva_id = absint($wpdb->insert_id);
+  $reference = rae_wompi_create_reference($reserva_id);
+  $amount_in_cents = rae_wompi_amount_in_cents();
+  $reserva = (object) [
+    'id' => $reserva_id,
+    'cliente_nombre' => $nombre,
+    'cliente_email' => $email,
+    'cliente_telefono' => $telefono,
+    'cliente_ciudad' => $ciudad,
+    'cliente_barrio' => $barrio,
+    'cliente_direccion' => $direccion,
+    'cliente_casa' => $casa,
+    'persona_id' => $persona_id,
+    'fecha' => $fecha,
+    'jornada' => $jornada,
+    'estado' => 'pendiente_pago',
+    'payment_reference' => $reference,
+  ];
+
+  $payment_updated = $wpdb->update(
+    $table,
+    [
+      'payment_reference' => $reference,
+    ],
+    ['id' => $reserva_id],
+    ['%s'],
+    ['%d']
+  );
+
+  if ($payment_updated === false) {
+    wp_send_json_error('La reserva fue creada, pero no se pudo preparar el pago.');
   }
 
-  wp_send_json_success('Reserva creada correctamente.');
+  if (function_exists('rae_enviar_email_reserva_creada')) {
+    rae_enviar_email_reserva_creada($reserva);
+  }
+
+  wp_send_json_success([
+    'message' => 'Reserva creada correctamente. Serás redirigido a Wompi para completar el pago.',
+    'payment_url' => rae_wompi_checkout_url($reserva, $reference, $amount_in_cents),
+    'reference' => $reference,
+  ]);
 }

@@ -119,8 +119,8 @@ class RAE_Widget_Reserva_Aseo extends Widget_Base {
         <p><strong>Dirección del servicio:</strong></p>
         <input type="text" name="ciudad" placeholder="Ciudad" required>
         <input type="text" name="barrio" placeholder="Barrio" required>
-        <input type="text" name="direccion" placeholder="Dirección" required>
-        <input type="text" name="casa" placeholder="Casa / Apartamento" required>
+        <input type="text" name="direccion" placeholder="Dirección" minlength="4" required>
+        <input type="text" name="casa" placeholder="Casa / Apartamento" minlength="4" required>
       </div>
 
       <button type="submit">Reservar servicio</button>

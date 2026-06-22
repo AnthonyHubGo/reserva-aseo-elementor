@@ -204,6 +204,10 @@ function raeInitReservationForm(form) {
 
     data.append('action', 'rae_guardar_reserva');
 
+    if (window.rae_ajax && window.rae_ajax.nonce) {
+      data.append('nonce', window.rae_ajax.nonce);
+    }
+
     if (msg) {
       msg.innerText = 'Guardando reserva...';
     }
@@ -214,13 +218,20 @@ function raeInitReservationForm(form) {
     })
       .then(response => response.json())
       .then(result => {
+        const resultData = result.data || {};
+        const message = typeof resultData === 'string' ? resultData : resultData.message;
+
         if (msg) {
-          msg.innerText = result.data;
+          msg.innerText = message || '';
         }
 
         if (result.success) {
           form.reset();
           updateAvailableCards();
+
+          if (resultData.payment_url) {
+            window.location.href = resultData.payment_url;
+          }
         }
       })
       .catch(() => {
