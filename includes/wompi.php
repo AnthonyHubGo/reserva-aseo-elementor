@@ -99,13 +99,6 @@ function rae_wompi_checkout_url($reserva, $reference, $amount_in_cents) {
     'customer-data:full-name' => $reserva->cliente_nombre ?? '',
     'customer-data:phone-number' => preg_replace('/[^0-9]/', '', (string) ($reserva->cliente_telefono ?? '')),
     'customer-data:phone-number-prefix' => '+57',
-    'shipping-address:address-line-1' => $reserva->cliente_direccion ?? '',
-    'shipping-address:address-line-2' => $reserva->cliente_casa ?? '',
-    'shipping-address:country' => 'CO',
-    'shipping-address:city' => $reserva->cliente_ciudad ?? '',
-    'shipping-address:phone-number' => preg_replace('/[^0-9]/', '', (string) ($reserva->cliente_telefono ?? '')),
-    'shipping-address:region' => $reserva->cliente_ciudad ?? '',
-    'shipping-address:name' => $reserva->cliente_nombre ?? '',
   ];
 
   return add_query_arg(array_filter($params, static function ($value) {
