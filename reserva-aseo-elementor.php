@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) exit;
 
 define('RAE_PATH', plugin_dir_path(__FILE__));
 define('RAE_URL', plugin_dir_url(__FILE__));
-define('RAE_DB_VERSION', '1.1.1');
+define('RAE_DB_VERSION', '1.2.0');
 
 require_once RAE_PATH . 'includes/db.php';
 require_once RAE_PATH . 'includes/roles.php';
@@ -19,6 +19,7 @@ require_once RAE_PATH . 'includes/personal-cpt.php';
 require_once RAE_PATH . 'includes/elementor-widget.php';
 require_once RAE_PATH . 'includes/email-templates.php';
 require_once RAE_PATH . 'includes/holidays.php';
+require_once RAE_PATH . 'includes/wompi.php';
 require_once RAE_PATH . 'includes/ajax.php';
 require_once RAE_PATH . 'includes/admin-reservas.php';
 require_once RAE_PATH . 'includes/admin-settings.php';
@@ -81,6 +82,7 @@ function rae_register_reserva_assets() {
 
   wp_localize_script('rae-js', 'rae_ajax', [
     'ajax_url' => admin_url('admin-ajax.php'),
+    'nonce' => wp_create_nonce('rae_guardar_reserva'),
   ]);
 
   wp_localize_script('rae-js', 'raeReservaConfig', [

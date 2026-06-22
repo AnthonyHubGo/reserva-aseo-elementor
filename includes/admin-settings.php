@@ -29,7 +29,7 @@ add_action('admin_init', function () {
     : '';
 
   if (
-    $settings_action !== 'guardar_logo_email' ||
+    $settings_action !== 'guardar_configuracion' ||
     !current_user_can('manage_options')
   ) {
     return;
@@ -53,6 +53,20 @@ add_action('admin_init', function () {
     delete_option('rae_email_logo_id');
   }
 
+  $wompi_settings = [
+    'mode' => isset($_POST['rae_wompi_mode']) && sanitize_text_field(wp_unslash($_POST['rae_wompi_mode'])) === 'production'
+      ? 'production'
+      : 'sandbox',
+    'public_key' => sanitize_text_field(wp_unslash($_POST['rae_wompi_public_key'] ?? '')),
+    'private_key' => sanitize_text_field(wp_unslash($_POST['rae_wompi_private_key'] ?? '')),
+    'events_secret' => sanitize_text_field(wp_unslash($_POST['rae_wompi_events_secret'] ?? '')),
+    'integrity_secret' => sanitize_text_field(wp_unslash($_POST['rae_wompi_integrity_secret'] ?? '')),
+    'currency' => 'COP',
+    'amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_amount_cop'] ?? ''))),
+  ];
+
+  update_option('rae_wompi_settings', $wompi_settings, false);
+
   wp_safe_redirect(
     add_query_arg(
       [
@@ -72,6 +86,14 @@ function rae_render_admin_settings() {
 
   $logo_id = absint(get_option('rae_email_logo_id'));
   $logo_url = $logo_id ? wp_get_attachment_image_url($logo_id, 'medium') : '';
+  $wompi = function_exists('rae_wompi_settings') ? rae_wompi_settings() : [];
+  $webhook_url = rest_url('sat-reservas/v1/wompi-webhook');
+  $webhook_logs = get_option('rae_wompi_webhook_logs', []);
+
+  if (!is_array($webhook_logs)) {
+    $webhook_logs = [];
+  }
+
   $settings_updated = isset($_GET['settings-updated']) ? sanitize_text_field(wp_unslash($_GET['settings-updated'])) : '';
   ?>
 
@@ -86,7 +108,7 @@ function rae_render_admin_settings() {
 
     <form method="post" action="<?php echo esc_url(admin_url('admin.php?page=reservas-aseo-configuracion')); ?>" class="rae-settings-form">
       <?php wp_nonce_field('rae_guardar_configuracion'); ?>
-      <input type="hidden" name="rae_settings_action" value="guardar_logo_email">
+      <input type="hidden" name="rae_settings_action" value="guardar_configuracion">
       <input type="hidden" id="rae_email_logo_id" name="rae_email_logo_id" value="<?php echo esc_attr($logo_id); ?>">
 
       <table class="form-table" role="presentation">
@@ -110,11 +132,88 @@ function rae_render_admin_settings() {
               </p>
             </td>
           </tr>
+
+          <tr>
+            <th scope="row">Wompi Colombia</th>
+            <td>
+              <fieldset>
+                <p>
+                  <label for="rae_wompi_mode"><strong>Modo</strong></label><br>
+                  <select id="rae_wompi_mode" name="rae_wompi_mode">
+                    <option value="sandbox" <?php selected($wompi['mode'] ?? 'sandbox', 'sandbox'); ?>>Sandbox</option>
+                    <option value="production" <?php selected($wompi['mode'] ?? 'sandbox', 'production'); ?>>Producción</option>
+                  </select>
+                </p>
+
+                <p>
+                  <label for="rae_wompi_public_key"><strong>Llave pública</strong></label><br>
+                  <input type="text" class="regular-text" id="rae_wompi_public_key" name="rae_wompi_public_key" value="<?php echo esc_attr($wompi['public_key'] ?? ''); ?>" autocomplete="off">
+                </p>
+
+                <p>
+                  <label for="rae_wompi_private_key"><strong>Llave privada</strong></label><br>
+                  <input type="password" class="regular-text" id="rae_wompi_private_key" name="rae_wompi_private_key" value="<?php echo esc_attr($wompi['private_key'] ?? ''); ?>" autocomplete="new-password">
+                </p>
+
+                <p>
+                  <label for="rae_wompi_events_secret"><strong>Llave de eventos / webhook</strong></label><br>
+                  <input type="password" class="regular-text" id="rae_wompi_events_secret" name="rae_wompi_events_secret" value="<?php echo esc_attr($wompi['events_secret'] ?? ''); ?>" autocomplete="new-password">
+                </p>
+
+                <p>
+                  <label for="rae_wompi_integrity_secret"><strong>Secreto de integridad</strong></label><br>
+                  <input type="password" class="regular-text" id="rae_wompi_integrity_secret" name="rae_wompi_integrity_secret" value="<?php echo esc_attr($wompi['integrity_secret'] ?? ''); ?>" autocomplete="new-password">
+                  <span class="description">Necesario para firmar el Web Checkout sin exponer secretos en el frontend.</span>
+                </p>
+
+                <p>
+                  <label for="rae_wompi_amount_cop"><strong>Valor por reserva en COP</strong></label><br>
+                  <input type="number" min="1" step="1" id="rae_wompi_amount_cop" name="rae_wompi_amount_cop" value="<?php echo esc_attr($wompi['amount_cop'] ?? ''); ?>">
+                </p>
+
+                <p>
+                  <strong>Moneda:</strong> COP
+                </p>
+
+                <p>
+                  <strong>URL webhook:</strong><br>
+                  <code><?php echo esc_html($webhook_url); ?></code>
+                </p>
+              </fieldset>
+            </td>
+          </tr>
         </tbody>
       </table>
 
       <?php submit_button('Guardar cambios'); ?>
     </form>
+
+    <h2>Últimos webhooks de Wompi</h2>
+
+    <?php if (empty($webhook_logs)): ?>
+      <p>No se ha recibido ningún webhook todavía.</p>
+    <?php else: ?>
+      <table class="widefat striped">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Mensaje</th>
+            <th>Contexto</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($webhook_logs as $webhook_log): ?>
+            <tr>
+              <td><?php echo esc_html($webhook_log['created_at'] ?? ''); ?></td>
+              <td><?php echo esc_html($webhook_log['status'] ?? ''); ?></td>
+              <td><?php echo esc_html($webhook_log['message'] ?? ''); ?></td>
+              <td><code><?php echo esc_html(wp_json_encode($webhook_log['context'] ?? [])); ?></code></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    <?php endif; ?>
   </div>
 
   <style>
