@@ -53,6 +53,14 @@ add_action('admin_init', function () {
     delete_option('rae_email_logo_id');
   }
 
+  $notification_email = sanitize_email(wp_unslash($_POST['rae_notification_email'] ?? ''));
+
+  if ($notification_email && is_email($notification_email)) {
+    update_option('rae_notification_email', $notification_email, false);
+  } else {
+    delete_option('rae_notification_email');
+  }
+
   $wompi_settings = [
     'mode' => isset($_POST['rae_wompi_mode']) && sanitize_text_field(wp_unslash($_POST['rae_wompi_mode'])) === 'production'
       ? 'production'
@@ -86,6 +94,7 @@ function rae_render_admin_settings() {
 
   $logo_id = absint(get_option('rae_email_logo_id'));
   $logo_url = $logo_id ? wp_get_attachment_image_url($logo_id, 'medium') : '';
+  $notification_email = sanitize_email(get_option('rae_notification_email', ''));
   $wompi = function_exists('rae_wompi_settings') ? rae_wompi_settings() : [];
   $webhook_url = rest_url('sat-reservas/v1/wompi-webhook');
   $webhook_logs = get_option('rae_wompi_webhook_logs', []);
@@ -130,6 +139,23 @@ function rae_render_admin_settings() {
                 <button type="button" class="button" id="rae-select-email-logo">Seleccionar logo</button>
                 <button type="button" class="button" id="rae-remove-email-logo" <?php disabled(!$logo_url); ?>>Quitar logo</button>
               </p>
+            </td>
+          </tr>
+
+          <tr>
+            <th scope="row">
+              <label for="rae_notification_email">Correo de notificaciones de reservas</label>
+            </th>
+            <td>
+              <input
+                type="email"
+                class="regular-text"
+                id="rae_notification_email"
+                name="rae_notification_email"
+                value="<?php echo esc_attr($notification_email); ?>"
+                placeholder="<?php echo esc_attr(get_option('admin_email')); ?>"
+              >
+              <p class="description">Recibirá una copia interna cuando se cree una reserva o cambie su estado. Déjalo vacío para no enviar notificaciones internas.</p>
             </td>
           </tr>
 

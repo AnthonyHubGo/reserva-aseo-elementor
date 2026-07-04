@@ -37,6 +37,12 @@ function rae_email_headers() {
   return ['Content-Type: text/html; charset=UTF-8'];
 }
 
+function rae_notification_email() {
+  $email = sanitize_email(get_option('rae_notification_email', ''));
+
+  return is_email($email) ? $email : '';
+}
+
 function rae_email_logo_url() {
   $logo_id = absint(get_option('rae_email_logo_id'));
 
@@ -163,7 +169,10 @@ function rae_enviar_email_reserva_creada($reserva) {
     'Gracias por confiar en SAT.'
   );
 
-  return wp_mail($reserva->cliente_email, $asunto, $mensaje, rae_email_headers());
+  $cliente_enviado = wp_mail($reserva->cliente_email, $asunto, $mensaje, rae_email_headers());
+  rae_enviar_email_notificacion_interna($reserva, 'pendiente_pago', 'Nueva reserva pendiente de pago');
+
+  return $cliente_enviado;
 }
 
 function rae_enviar_email_reserva_estado($reserva, $nuevo_estado) {
@@ -185,5 +194,45 @@ function rae_enviar_email_reserva_estado($reserva, $nuevo_estado) {
     'Si tienes alguna pregunta o necesitas ajustar la información de tu reserva, comunícate con nuestro equipo de atención. Gracias por confiar en SAT.'
   );
 
-  return wp_mail($reserva->cliente_email, $asunto, $mensaje, rae_email_headers());
+  $cliente_enviado = wp_mail($reserva->cliente_email, $asunto, $mensaje, rae_email_headers());
+  rae_enviar_email_notificacion_interna($reserva, $nuevo_estado, 'Estado de reserva actualizado');
+
+  return $cliente_enviado;
+}
+
+function rae_enviar_email_notificacion_interna($reserva, $estado, $heading) {
+  $notification_email = rae_notification_email();
+
+  if (!$notification_email || !$reserva) {
+    return false;
+  }
+
+  $estado_label = rae_email_nombre_estado($estado);
+  $payment_reference = trim((string) ($reserva->payment_reference ?? ''));
+  $wompi_transaction_id = trim((string) ($reserva->wompi_transaction_id ?? ''));
+  $intro = 'Se registró una actualización en una reserva de aseo. Revisa los detalles para seguimiento operativo.';
+  $reserva_rows = rae_email_reserva_rows($reserva, $estado_label, 'Estado');
+
+  if ($payment_reference !== '') {
+    $reserva_rows[] = rae_email_row('Referencia de pago', $payment_reference);
+  }
+
+  if ($wompi_transaction_id !== '') {
+    $reserva_rows[] = rae_email_row('Transacción Wompi', $wompi_transaction_id);
+  }
+
+  $mensaje = rae_email_template(
+    $heading,
+    $intro,
+    rae_email_cliente_rows($reserva),
+    $reserva_rows,
+    'Este correo fue enviado automáticamente desde el sistema de reservas SAT.'
+  );
+
+  return wp_mail(
+    $notification_email,
+    '[SAT Reservas] ' . $heading,
+    $mensaje,
+    rae_email_headers()
+  );
 }
