@@ -72,8 +72,14 @@ function rae_guardar_reserva() {
     wp_send_json_error('La persona seleccionada no está disponible para reservas.');
   }
 
-  if (!function_exists('rae_wompi_can_create_checkout') || !rae_wompi_can_create_checkout()) {
+  if (!function_exists('rae_wompi_can_create_checkout') || !rae_wompi_can_create_checkout($jornada)) {
     wp_send_json_error('La pasarela de pagos no está configurada correctamente.');
+  }
+
+  $amount_cop = function_exists('rae_wompi_amount_for_jornada') ? rae_wompi_amount_for_jornada($jornada) : 0;
+
+  if ($amount_cop <= 0) {
+    wp_send_json_error('No hay un valor configurado para la jornada seleccionada.');
   }
 
   $jornadas_conflicto = $jornada === 'completa'
@@ -112,8 +118,9 @@ function rae_guardar_reserva() {
       'estado' => 'pendiente_pago',
       'payment_status' => 'pending',
       'payment_gateway' => 'wompi',
+      'payment_amount_cop' => $amount_cop,
     ],
-    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s']
+    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d']
   );
 
   if (!$insertado) {
@@ -122,7 +129,7 @@ function rae_guardar_reserva() {
 
   $reserva_id = absint($wpdb->insert_id);
   $reference = rae_wompi_create_reference($reserva_id);
-  $amount_in_cents = rae_wompi_amount_in_cents();
+  $amount_in_cents = $amount_cop * 100;
   $reserva = (object) [
     'id' => $reserva_id,
     'cliente_nombre' => $nombre,
@@ -137,6 +144,7 @@ function rae_guardar_reserva() {
     'jornada' => $jornada,
     'estado' => 'pendiente_pago',
     'payment_reference' => $reference,
+    'payment_amount_cop' => $amount_cop,
   ];
 
   $payment_updated = $wpdb->update(

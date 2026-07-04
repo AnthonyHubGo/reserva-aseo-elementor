@@ -391,6 +391,9 @@ function rae_render_admin_reservas() {
                   <?php if (!empty($reserva->payment_reference)): ?>
                     <span>Ref: <?php echo esc_html($reserva->payment_reference); ?></span>
                   <?php endif; ?>
+                  <?php if (!empty($reserva->payment_amount_cop)): ?>
+                    <span>Valor: <?php echo esc_html(rae_formatear_pesos_colombianos($reserva->payment_amount_cop)); ?></span>
+                  <?php endif; ?>
                   <?php if (!empty($reserva->wompi_transaction_id)): ?>
                     <span>Wompi: <?php echo esc_html($reserva->wompi_transaction_id); ?></span>
                   <?php endif; ?>
@@ -758,6 +761,10 @@ function rae_nombre_estado_pago($estado) {
   ];
 
   return $estados[strtolower((string) $estado)] ?? ucfirst((string) $estado);
+}
+
+function rae_formatear_pesos_colombianos($amount) {
+  return '$' . number_format(absint($amount), 0, ',', '.');
 }
 
 function rae_valor_reserva_o_default($valor) {

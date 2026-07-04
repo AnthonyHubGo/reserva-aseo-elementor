@@ -11,6 +11,8 @@ function rae_wompi_default_settings() {
     'integrity_secret' => '',
     'currency' => 'COP',
     'amount_cop' => '',
+    'half_day_amount_cop' => '',
+    'full_day_amount_cop' => '',
   ];
 }
 
@@ -24,6 +26,8 @@ function rae_wompi_settings() {
     'integrity_secret' => 'RAE_WOMPI_INTEGRITY_SECRET',
     'currency' => 'RAE_WOMPI_CURRENCY',
     'amount_cop' => 'RAE_WOMPI_AMOUNT_COP',
+    'half_day_amount_cop' => 'RAE_WOMPI_HALF_DAY_AMOUNT_COP',
+    'full_day_amount_cop' => 'RAE_WOMPI_FULL_DAY_AMOUNT_COP',
   ];
 
   foreach ($constant_map as $key => $constant) {
@@ -46,23 +50,42 @@ function rae_wompi_api_base_url() {
     : 'https://sandbox.wompi.co/v1';
 }
 
-function rae_wompi_amount_in_cents() {
+function rae_wompi_sanitize_amount_cop($amount) {
+  return preg_replace('/[^0-9]/', '', (string) $amount);
+}
+
+function rae_wompi_amount_for_jornada($jornada) {
   $settings = rae_wompi_settings();
-  $amount = preg_replace('/[^0-9]/', '', (string) $settings['amount_cop']);
+  $fallback_amount = rae_wompi_sanitize_amount_cop($settings['amount_cop'] ?? '');
+  $half_day_amount = rae_wompi_sanitize_amount_cop($settings['half_day_amount_cop'] ?? '');
+  $full_day_amount = rae_wompi_sanitize_amount_cop($settings['full_day_amount_cop'] ?? '');
+  $amount = '';
+
+  if (in_array($jornada, ['manana', 'tarde'], true)) {
+    $amount = $half_day_amount !== '' ? $half_day_amount : $fallback_amount;
+  } elseif ($jornada === 'completa') {
+    $amount = $full_day_amount !== '' ? $full_day_amount : $fallback_amount;
+  }
 
   if ($amount === '') {
     return 0;
   }
 
-  return absint($amount) * 100;
+  return absint($amount);
 }
 
-function rae_wompi_can_create_checkout() {
+function rae_wompi_amount_in_cents($jornada = '') {
+  $amount = rae_wompi_amount_for_jornada($jornada);
+
+  return $amount > 0 ? $amount * 100 : 0;
+}
+
+function rae_wompi_can_create_checkout($jornada = '') {
   $settings = rae_wompi_settings();
 
   return $settings['public_key'] !== ''
     && $settings['integrity_secret'] !== ''
-    && rae_wompi_amount_in_cents() > 0;
+    && rae_wompi_amount_in_cents($jornada) > 0;
 }
 
 function rae_wompi_create_reference($reserva_id) {
@@ -231,9 +254,22 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
   }
 
   $wompi_status = strtoupper(sanitize_text_field($transaction['status'] ?? ''));
+  $transaction_amount_in_cents = absint($transaction['amount_in_cents'] ?? 0);
+  $expected_amount_in_cents = absint($reserva->payment_amount_cop ?? 0) * 100;
   $estado_reserva = $reserva->estado;
   $payment_status = strtolower($wompi_status);
   $paid_at = $reserva->paid_at ?? null;
+
+  if ($expected_amount_in_cents > 0 && $transaction_amount_in_cents > 0 && $transaction_amount_in_cents !== $expected_amount_in_cents) {
+    rae_wompi_log('Monto de transacción no coincide con reserva', [
+      'reference' => $reference,
+      'transaction_id' => $transaction_id,
+      'expected_amount_in_cents' => $expected_amount_in_cents,
+      'transaction_amount_in_cents' => $transaction_amount_in_cents,
+    ]);
+
+    return false;
+  }
 
   if ($wompi_status === 'APPROVED') {
     $estado_reserva = 'confirmada';
@@ -262,6 +298,10 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
 
   if ($updated !== false && $estado_reserva !== $reserva->estado && is_email($reserva->cliente_email)) {
     $reserva->estado = $estado_reserva;
+    $reserva->payment_status = $payment_status;
+    $reserva->wompi_transaction_id = $transaction_id;
+    $reserva->payment_gateway = 'wompi';
+    $reserva->paid_at = $paid_at;
     rae_enviar_email_estado_reserva($reserva, $estado_reserva);
   }
 

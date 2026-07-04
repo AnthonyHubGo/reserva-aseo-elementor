@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) exit;
 
 define('RAE_PATH', plugin_dir_path(__FILE__));
 define('RAE_URL', plugin_dir_url(__FILE__));
-define('RAE_DB_VERSION', '1.2.0');
+define('RAE_DB_VERSION', '1.3.0');
 
 require_once RAE_PATH . 'includes/db.php';
 require_once RAE_PATH . 'includes/roles.php';

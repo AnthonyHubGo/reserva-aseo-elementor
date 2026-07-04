@@ -71,6 +71,8 @@ add_action('admin_init', function () {
     'integrity_secret' => sanitize_text_field(wp_unslash($_POST['rae_wompi_integrity_secret'] ?? '')),
     'currency' => 'COP',
     'amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_amount_cop'] ?? ''))),
+    'half_day_amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_half_day_amount_cop'] ?? ''))),
+    'full_day_amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_full_day_amount_cop'] ?? ''))),
   ];
 
   update_option('rae_wompi_settings', $wompi_settings, false);
@@ -193,8 +195,24 @@ function rae_render_admin_settings() {
                 </p>
 
                 <p>
-                  <label for="rae_wompi_amount_cop"><strong>Valor por reserva en COP</strong></label><br>
-                  <input type="number" min="1" step="1" id="rae_wompi_amount_cop" name="rae_wompi_amount_cop" value="<?php echo esc_attr($wompi['amount_cop'] ?? ''); ?>">
+                  <label for="rae_wompi_half_day_amount_cop"><strong>Valor media jornada (4 horas) en COP</strong></label><br>
+                  <input type="number" min="1" step="1" id="rae_wompi_half_day_amount_cop" name="rae_wompi_half_day_amount_cop" value="<?php echo esc_attr($wompi['half_day_amount_cop'] ?? ''); ?>" placeholder="120000">
+                </p>
+
+                <p>
+                  <label for="rae_wompi_full_day_amount_cop"><strong>Valor jornada completa (8 horas) en COP</strong></label><br>
+                  <input type="number" min="1" step="1" id="rae_wompi_full_day_amount_cop" name="rae_wompi_full_day_amount_cop" value="<?php echo esc_attr($wompi['full_day_amount_cop'] ?? ''); ?>" placeholder="150000">
+                </p>
+
+                <input
+                  type="hidden"
+                  id="rae_wompi_amount_cop"
+                  name="rae_wompi_amount_cop"
+                  value="<?php echo esc_attr($wompi['amount_cop'] ?? ''); ?>"
+                >
+
+                <p class="description">
+                  El monto enviado a Wompi se calcula según la jornada elegida por el cliente. Los valores se guardan sin puntos ni símbolos.
                 </p>
 
                 <p>

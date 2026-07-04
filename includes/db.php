@@ -27,6 +27,7 @@ class RAE_DB {
       payment_reference VARCHAR(80) NOT NULL DEFAULT '',
       wompi_transaction_id VARCHAR(100) NOT NULL DEFAULT '',
       payment_gateway VARCHAR(30) NOT NULL DEFAULT '',
+      payment_amount_cop BIGINT UNSIGNED NOT NULL DEFAULT 0,
       payment_response LONGTEXT NULL,
       paid_at DATETIME NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
