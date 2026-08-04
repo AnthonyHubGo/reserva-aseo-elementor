@@ -11,6 +11,10 @@ class RAE_Activator {
       rae_registrar_roles_y_capabilities();
     }
 
+    if (function_exists('rae_wompi_schedule_expiration')) {
+      rae_wompi_schedule_expiration();
+    }
+
     update_option('rae_db_version', RAE_DB_VERSION);
   }
 }

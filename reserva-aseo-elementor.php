@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) exit;
 
 define('RAE_PATH', plugin_dir_path(__FILE__));
 define('RAE_URL', plugin_dir_url(__FILE__));
-define('RAE_DB_VERSION', '1.3.0');
+define('RAE_DB_VERSION', '1.4.0');
 
 require_once RAE_PATH . 'includes/db.php';
 require_once RAE_PATH . 'includes/roles.php';
@@ -31,12 +31,20 @@ add_action('plugins_loaded', function () {
     rae_registrar_roles_y_capabilities();
   }
 
+  if (function_exists('rae_wompi_schedule_expiration')) {
+    rae_wompi_schedule_expiration();
+  }
+
   if (get_option('rae_db_version') === RAE_DB_VERSION) {
     return;
   }
 
   RAE_DB::create_table();
   update_option('rae_db_version', RAE_DB_VERSION);
+});
+
+register_deactivation_hook(__FILE__, function () {
+  wp_clear_scheduled_hook('rae_wompi_expire_pending_reservations');
 });
 
 function rae_register_reserva_assets() {

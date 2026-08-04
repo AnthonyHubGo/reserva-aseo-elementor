@@ -13,6 +13,7 @@ function rae_wompi_default_settings() {
     'amount_cop' => '',
     'half_day_amount_cop' => '',
     'full_day_amount_cop' => '',
+    'payment_expiration_minutes' => 20,
   ];
 }
 
@@ -28,6 +29,7 @@ function rae_wompi_settings() {
     'amount_cop' => 'RAE_WOMPI_AMOUNT_COP',
     'half_day_amount_cop' => 'RAE_WOMPI_HALF_DAY_AMOUNT_COP',
     'full_day_amount_cop' => 'RAE_WOMPI_FULL_DAY_AMOUNT_COP',
+    'payment_expiration_minutes' => 'RAE_WOMPI_PAYMENT_EXPIRATION_MINUTES',
   ];
 
   foreach ($constant_map as $key => $constant) {
@@ -80,11 +82,64 @@ function rae_wompi_amount_in_cents($jornada = '') {
   return $amount > 0 ? $amount * 100 : 0;
 }
 
+function rae_wompi_payment_expiration_minutes($settings = null) {
+  $settings = is_array($settings) ? $settings : rae_wompi_settings();
+  $minutes = absint($settings['payment_expiration_minutes'] ?? 20);
+
+  return max(10, min(60, $minutes ?: 20));
+}
+
+function rae_wompi_reservation_hold_minutes($settings = null) {
+  return rae_wompi_payment_expiration_minutes($settings) + 5;
+}
+
+function rae_wompi_checkout_expiration_time($created_at = '', $settings = null) {
+  try {
+    $created = $created_at !== ''
+      ? new DateTimeImmutable($created_at, wp_timezone())
+      : new DateTimeImmutable('now', wp_timezone());
+  } catch (Exception $exception) {
+    $created = new DateTimeImmutable('now', wp_timezone());
+  }
+
+  return $created
+    ->modify('+' . rae_wompi_payment_expiration_minutes($settings) . ' minutes')
+    ->setTimezone(new DateTimeZone('UTC'))
+    ->format('Y-m-d\TH:i:s.000\Z');
+}
+
+function rae_wompi_credentials_match_mode($settings = null) {
+  $settings = is_array($settings) ? $settings : rae_wompi_settings();
+  $mode = ($settings['mode'] ?? '') === 'production' ? 'production' : 'sandbox';
+  $prefixes = $mode === 'production'
+    ? [
+      'public_key' => 'pub_prod_',
+      'private_key' => 'prv_prod_',
+      'events_secret' => 'prod_events_',
+      'integrity_secret' => 'prod_integrity_',
+    ]
+    : [
+      'public_key' => 'pub_test_',
+      'private_key' => 'prv_test_',
+      'events_secret' => 'test_events_',
+      'integrity_secret' => 'test_integrity_',
+    ];
+
+  foreach ($prefixes as $key => $prefix) {
+    $value = (string) ($settings[$key] ?? '');
+
+    if ($value === '' || strpos($value, $prefix) !== 0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function rae_wompi_can_create_checkout($jornada = '') {
   $settings = rae_wompi_settings();
 
-  return $settings['public_key'] !== ''
-    && $settings['integrity_secret'] !== ''
+  return rae_wompi_credentials_match_mode($settings)
     && rae_wompi_amount_in_cents($jornada) > 0;
 }
 
@@ -92,10 +147,15 @@ function rae_wompi_create_reference($reserva_id) {
   return 'RAE-' . absint($reserva_id) . '-' . strtoupper(wp_generate_password(10, false, false));
 }
 
-function rae_wompi_integrity_signature($reference, $amount_in_cents, $currency) {
+function rae_wompi_integrity_signature($reference, $amount_in_cents, $currency, $expiration_time = '') {
   $settings = rae_wompi_settings();
+  $payload = $reference . $amount_in_cents . $currency;
 
-  return hash('sha256', $reference . $amount_in_cents . $currency . $settings['integrity_secret']);
+  if ($expiration_time !== '') {
+    $payload .= $expiration_time;
+  }
+
+  return hash('sha256', $payload . $settings['integrity_secret']);
 }
 
 function rae_wompi_return_url($reference = '') {
@@ -111,12 +171,14 @@ function rae_wompi_return_url($reference = '') {
 function rae_wompi_checkout_url($reserva, $reference, $amount_in_cents) {
   $settings = rae_wompi_settings();
   $currency = $settings['currency'];
+  $expiration_time = rae_wompi_checkout_expiration_time($reserva->created_at ?? '', $settings);
   $params = [
     'public-key' => $settings['public_key'],
     'currency' => $currency,
     'amount-in-cents' => $amount_in_cents,
     'reference' => $reference,
-    'signature:integrity' => rae_wompi_integrity_signature($reference, $amount_in_cents, $currency),
+    'signature:integrity' => rae_wompi_integrity_signature($reference, $amount_in_cents, $currency, $expiration_time),
+    'expiration-time' => $expiration_time,
     'redirect-url' => rae_wompi_return_url($reference),
     'customer-data:email' => $reserva->cliente_email ?? '',
     'customer-data:full-name' => $reserva->cliente_nombre ?? '',
@@ -229,7 +291,7 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
   $reference = sanitize_text_field($transaction['reference'] ?? '');
   $transaction_id = sanitize_text_field($transaction['id'] ?? '');
 
-  if ($reference === '' && $transaction_id === '') {
+  if ($reference === '' || $transaction_id === '') {
     return false;
   }
 
@@ -253,27 +315,83 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
     return false;
   }
 
+  $stored_reference = (string) ($reserva->payment_reference ?? '');
+  $stored_transaction_id = (string) ($reserva->wompi_transaction_id ?? '');
+
+  if ($stored_reference === '' || !hash_equals($stored_reference, $reference)) {
+    rae_wompi_log('La referencia de Wompi no coincide con la reserva', [
+      'reference' => $reference,
+      'transaction_id' => $transaction_id,
+      'reserva_id' => absint($reserva->id),
+    ]);
+
+    return false;
+  }
+
+  if ($stored_transaction_id !== '' && !hash_equals($stored_transaction_id, $transaction_id)) {
+    rae_wompi_log('El ID de transacción no coincide con la reserva', [
+      'reference' => $reference,
+      'transaction_id' => $transaction_id,
+      'reserva_id' => absint($reserva->id),
+    ]);
+
+    return false;
+  }
+
   $wompi_status = strtoupper(sanitize_text_field($transaction['status'] ?? ''));
+  $transaction_currency = strtoupper(sanitize_text_field($transaction['currency'] ?? ''));
   $transaction_amount_in_cents = absint($transaction['amount_in_cents'] ?? 0);
   $expected_amount_in_cents = absint($reserva->payment_amount_cop ?? 0) * 100;
   $estado_reserva = $reserva->estado;
   $payment_status = strtolower($wompi_status);
   $paid_at = $reserva->paid_at ?? null;
 
-  if ($expected_amount_in_cents > 0 && $transaction_amount_in_cents > 0 && $transaction_amount_in_cents !== $expected_amount_in_cents) {
-    rae_wompi_log('Monto de transacción no coincide con reserva', [
+  if (!in_array($wompi_status, ['APPROVED', 'DECLINED', 'VOIDED', 'ERROR', 'PENDING', 'PENDING_VOBO'], true)) {
+    rae_wompi_log('Estado de transacción Wompi desconocido', [
       'reference' => $reference,
       'transaction_id' => $transaction_id,
-      'expected_amount_in_cents' => $expected_amount_in_cents,
-      'transaction_amount_in_cents' => $transaction_amount_in_cents,
+      'status' => $wompi_status,
     ]);
 
     return false;
   }
 
+  if (
+    $expected_amount_in_cents <= 0 ||
+    $transaction_amount_in_cents !== $expected_amount_in_cents ||
+    $transaction_currency !== 'COP'
+  ) {
+    rae_wompi_log('Monto o moneda de transacción no coincide con reserva', [
+      'reference' => $reference,
+      'transaction_id' => $transaction_id,
+      'expected_amount_in_cents' => $expected_amount_in_cents,
+      'transaction_amount_in_cents' => $transaction_amount_in_cents,
+      'transaction_currency' => $transaction_currency,
+    ]);
+
+    return false;
+  }
+
+  if (strtolower((string) ($reserva->payment_status ?? '')) === 'approved' && $wompi_status !== 'APPROVED') {
+    rae_wompi_log('Se ignoró una regresión de estado para un pago aprobado', [
+      'reference' => $reference,
+      'transaction_id' => $transaction_id,
+      'incoming_status' => $wompi_status,
+    ]);
+
+    return true;
+  }
+
   if ($wompi_status === 'APPROVED') {
-    $estado_reserva = 'confirmada';
-    $paid_at = current_time('mysql');
+    if ($estado_reserva === 'expirada') {
+      $estado_reserva = 'pago_revision';
+    } elseif ($estado_reserva !== 'cancelada') {
+      $estado_reserva = 'confirmada';
+    }
+
+    if (empty($paid_at)) {
+      $paid_at = current_time('mysql');
+    }
   } elseif (in_array($wompi_status, ['DECLINED', 'VOIDED', 'ERROR'], true)) {
     $estado_reserva = 'rechazada';
   } elseif (in_array($wompi_status, ['PENDING', 'PENDING_VOBO'], true)) {
@@ -302,11 +420,92 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
     $reserva->wompi_transaction_id = $transaction_id;
     $reserva->payment_gateway = 'wompi';
     $reserva->paid_at = $paid_at;
-    rae_enviar_email_estado_reserva($reserva, $estado_reserva);
+    if ($estado_reserva === 'pago_revision' && function_exists('rae_enviar_email_notificacion_interna')) {
+      rae_enviar_email_notificacion_interna($reserva, $estado_reserva, 'Pago recibido después de caducar la reserva');
+    } else {
+      rae_enviar_email_estado_reserva($reserva, $estado_reserva);
+    }
   }
 
   return $updated !== false;
 }
+
+function rae_wompi_expiration_cutoff($now = '', $settings = null) {
+  try {
+    $current = $now !== ''
+      ? new DateTimeImmutable($now, wp_timezone())
+      : new DateTimeImmutable('now', wp_timezone());
+  } catch (Exception $exception) {
+    $current = new DateTimeImmutable('now', wp_timezone());
+  }
+
+  return $current
+    ->modify('-' . rae_wompi_reservation_hold_minutes($settings) . ' minutes')
+    ->format('Y-m-d H:i:s');
+}
+
+function rae_wompi_expire_pending_reservations($now = '') {
+  global $wpdb;
+
+  $table = $wpdb->prefix . 'reservas_aseo';
+  $cutoff = rae_wompi_expiration_cutoff($now);
+  $reservations = $wpdb->get_results(
+    $wpdb->prepare(
+      "SELECT * FROM $table WHERE estado = %s AND payment_gateway = %s AND payment_status IN (%s, %s, %s) AND created_at <= %s ORDER BY id ASC LIMIT 50",
+      'pendiente_pago',
+      'wompi',
+      '',
+      'pending',
+      'pending_vobo',
+      $cutoff
+    )
+  );
+  $expired = 0;
+
+  foreach ($reservations as $reservation) {
+    $updated = $wpdb->query(
+      $wpdb->prepare(
+        "UPDATE $table SET estado = %s, payment_status = %s WHERE id = %d AND estado = %s AND payment_status IN (%s, %s, %s)",
+        'expirada',
+        'expired',
+        absint($reservation->id),
+        'pendiente_pago',
+        '',
+        'pending',
+        'pending_vobo'
+      )
+    );
+
+    if ($updated) {
+      $expired++;
+      $reservation->estado = 'expirada';
+      $reservation->payment_status = 'expired';
+
+      if (is_email($reservation->cliente_email ?? '')) {
+        rae_enviar_email_estado_reserva($reservation, 'expirada');
+      }
+    }
+  }
+
+  return $expired;
+}
+
+add_filter('cron_schedules', function ($schedules) {
+  $schedules['rae_every_five_minutes'] = [
+    'interval' => 5 * MINUTE_IN_SECONDS,
+    'display' => 'Cada 5 minutos (Reservas de Aseo)',
+  ];
+
+  return $schedules;
+});
+
+function rae_wompi_schedule_expiration() {
+  if (!wp_next_scheduled('rae_wompi_expire_pending_reservations')) {
+    wp_schedule_event(time() + MINUTE_IN_SECONDS, 'rae_every_five_minutes', 'rae_wompi_expire_pending_reservations');
+  }
+}
+
+add_action('rae_wompi_expire_pending_reservations', 'rae_wompi_expire_pending_reservations');
 
 add_action('rest_api_init', function () {
   register_rest_route('sat-reservas/v1', '/wompi-webhook', [

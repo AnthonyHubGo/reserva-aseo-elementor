@@ -14,6 +14,18 @@ add_action('admin_menu', function () {
   );
 });
 
+function rae_reserva_puede_confirmarse_manualmente($reserva) {
+  if (!$reserva || ($reserva->payment_gateway ?? '') === 'wompi') {
+    return false;
+  }
+
+  return in_array(
+    (string) ($reserva->estado ?? ''),
+    ['pendiente', 'pendiente_pago', 'pagado'],
+    true
+  );
+}
+
 /**
  * Maneja acciones antes de imprimir HTML.
  */
@@ -137,6 +149,7 @@ add_action('admin_init', function () {
   }
 
   if ($accion === 'confirmar') {
+    check_admin_referer('rae_confirmar_reserva_' . $reserva_id);
     $nuevo_estado = 'confirmada';
   }
 
@@ -149,7 +162,9 @@ add_action('admin_init', function () {
       )
     );
 
-    if ($reserva && $reserva->estado !== $nuevo_estado) {
+    if (!rae_reserva_puede_confirmarse_manualmente($reserva)) {
+      $redirect_args['rae_error'] = 'confirmacion_no_disponible';
+    } else {
       $actualizado = $wpdb->update(
         $table,
         ['estado' => $nuevo_estado],
@@ -175,9 +190,13 @@ function rae_render_admin_reservas() {
 
   global $wpdb;
 
+  if (function_exists('rae_wompi_expire_pending_reservations')) {
+    rae_wompi_expire_pending_reservations();
+  }
+
   $table = $wpdb->prefix . 'reservas_aseo';
   $jornadas_permitidas = ['manana', 'tarde', 'completa'];
-  $estados_permitidos = ['pendiente', 'pendiente_pago', 'pagado', 'confirmada', 'rechazada', 'cancelada'];
+  $estados_permitidos = ['pendiente', 'pendiente_pago', 'pagado', 'confirmada', 'rechazada', 'cancelada', 'expirada', 'pago_revision'];
   $puede_gestionar_reservas = current_user_can('rae_manage_reservas');
 
   $persona_id = isset($_GET['persona_id']) ? absint(wp_unslash($_GET['persona_id'])) : 0;
@@ -263,6 +282,12 @@ function rae_render_admin_reservas() {
       </div>
     <?php endif; ?>
 
+    <?php if ($admin_error === 'confirmacion_no_disponible'): ?>
+      <div class="notice notice-error is-dismissible">
+        <p>Esta reserva no puede confirmarse manualmente. Los pagos de Wompi se confirman automáticamente y una reserva cancelada no puede reactivarse.</p>
+      </div>
+    <?php endif; ?>
+
     <form method="get" action="<?php echo esc_url(admin_url('admin.php')); ?>" style="margin: 20px 0;">
       <input type="hidden" name="page" value="reservas-aseo">
 
@@ -292,6 +317,8 @@ function rae_render_admin_reservas() {
         <option value="confirmada" <?php selected($estado, 'confirmada'); ?>>Confirmada</option>
         <option value="rechazada" <?php selected($estado, 'rechazada'); ?>>Rechazada</option>
         <option value="cancelada" <?php selected($estado, 'cancelada'); ?>>Cancelada</option>
+        <option value="expirada" <?php selected($estado, 'expirada'); ?>>Expirada</option>
+        <option value="pago_revision" <?php selected($estado, 'pago_revision'); ?>>Pago requiere revisión</option>
       </select>
 
       <button class="button button-primary">Filtrar</button>
@@ -404,20 +431,26 @@ function rae_render_admin_reservas() {
                 <?php if ($puede_gestionar_reservas): ?>
                   <div class="rae-reserva-actions">
                     <div class="rae-reserva-state-actions">
-                      <?php if ($reserva->estado !== 'confirmada'): ?>
+                      <?php
+                      $puede_confirmar_manualmente = rae_reserva_puede_confirmarse_manualmente($reserva);
+                      ?>
+                      <?php if ($puede_confirmar_manualmente): ?>
                         <a
                           class="button button-primary"
-                          href="<?php echo esc_url(add_query_arg(array_merge($filtros_actuales, [
-                            'page' => 'reservas-aseo',
-                            'rae_action' => 'confirmar',
-                            'reserva_id' => $reserva->id,
-                          ]), admin_url('admin.php'))); ?>"
+                          href="<?php echo esc_url(wp_nonce_url(
+                            add_query_arg(array_merge($filtros_actuales, [
+                              'page' => 'reservas-aseo',
+                              'rae_action' => 'confirmar',
+                              'reserva_id' => $reserva->id,
+                            ]), admin_url('admin.php')),
+                            'rae_confirmar_reserva_' . absint($reserva->id)
+                          )); ?>"
                         >
                           Confirmar
                         </a>
                       <?php endif; ?>
 
-                      <?php if ($reserva->estado !== 'cancelada'): ?>
+                      <?php if (!in_array($reserva->estado, ['cancelada', 'expirada', 'rechazada'], true)): ?>
                         <button
                           type="button"
                           class="button"
@@ -438,7 +471,7 @@ function rae_render_admin_reservas() {
                     </button>
                   </div>
 
-                  <?php if ($reserva->estado !== 'cancelada'): ?>
+                  <?php if (!in_array($reserva->estado, ['cancelada', 'expirada', 'rechazada'], true)): ?>
                     <div id="rae-cancel-reserva-<?php echo esc_attr($reserva->id); ?>" class="rae-cancel-reserva-modal" hidden>
                       <div class="rae-delete-reserva-dialog" role="dialog" aria-modal="true" aria-labelledby="rae-cancel-title-<?php echo esc_attr($reserva->id); ?>">
                         <h2 id="rae-cancel-title-<?php echo esc_attr($reserva->id); ?>">Cancelar reserva</h2>
@@ -744,6 +777,8 @@ function rae_nombre_estado_reserva($estado) {
     'confirmada' => 'Confirmada',
     'rechazada' => 'Rechazada',
     'cancelada' => 'Cancelada',
+    'expirada' => 'Expirada',
+    'pago_revision' => 'Pago requiere revisión',
   ];
 
   return $estados[$estado] ?? ucfirst((string) $estado);
@@ -758,6 +793,7 @@ function rae_nombre_estado_pago($estado) {
     'declined' => 'Rechazado',
     'voided' => 'Anulado',
     'error' => 'Error',
+    'expired' => 'Caducado',
   ];
 
   return $estados[strtolower((string) $estado)] ?? ucfirst((string) $estado);

@@ -20,6 +20,8 @@ function rae_email_nombre_estado($estado) {
     'confirmada' => 'Confirmada',
     'rechazada' => 'Rechazada',
     'cancelada' => 'Cancelada',
+    'expirada' => 'Expirada por falta de pago',
+    'pago_revision' => 'Pago requiere revisión',
   ];
 
   return $estados[$estado] ?? ucfirst((string) $estado);
@@ -28,6 +30,10 @@ function rae_email_nombre_estado($estado) {
 function rae_email_asunto_estado($estado) {
   if ($estado === 'pendiente' || $estado === 'pendiente_pago') {
     return 'Tu reserva con SAT esta pendiente';
+  }
+
+  if ($estado === 'expirada') {
+    return 'Tu reserva con SAT expiró por falta de pago';
   }
 
   return 'Tu reserva con SAT ha sido ' . strtolower(rae_email_nombre_estado($estado));

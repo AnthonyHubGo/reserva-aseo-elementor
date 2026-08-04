@@ -34,10 +34,80 @@ class RAE_DB {
       PRIMARY KEY (id),
       KEY payment_reference (payment_reference),
       KEY wompi_transaction_id (wompi_transaction_id),
-      UNIQUE KEY reserva_unica (persona_id, fecha, jornada)
+      KEY reserva_disponibilidad (persona_id, fecha, jornada, estado)
     ) $charset;";
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
+
+    // Versiones anteriores impedían conservar reservas canceladas o rechazadas
+    // y volver a utilizar la misma jornada. La exclusión concurrente se maneja
+    // ahora con un bloqueo por persona y fecha al crear la reserva.
+    $legacy_unique_index = $wpdb->get_var(
+      "SHOW INDEX FROM $table WHERE Key_name = 'reserva_unica'"
+    );
+
+    if ($legacy_unique_index !== null) {
+      $wpdb->query("ALTER TABLE $table DROP INDEX reserva_unica");
+    }
   }
+}
+
+function rae_reserva_lock_name($persona_id, $fecha) {
+  return sprintf(
+    'rae_%d_%d_%s',
+    get_current_blog_id(),
+    absint($persona_id),
+    substr(hash('sha256', (string) $fecha), 0, 20)
+  );
+}
+
+function rae_adquirir_bloqueo_reserva($persona_id, $fecha, $timeout = 5) {
+  global $wpdb;
+
+  $lock_name = rae_reserva_lock_name($persona_id, $fecha);
+  $acquired = $wpdb->get_var(
+    $wpdb->prepare('SELECT GET_LOCK(%s, %d)', $lock_name, absint($timeout))
+  );
+
+  return (string) $acquired === '1';
+}
+
+function rae_liberar_bloqueo_reserva($persona_id, $fecha) {
+  global $wpdb;
+
+  $wpdb->get_var(
+    $wpdb->prepare('SELECT RELEASE_LOCK(%s)', rae_reserva_lock_name($persona_id, $fecha))
+  );
+}
+
+function rae_reserva_tiene_conflicto($persona_id, $fecha, $jornada) {
+  global $wpdb;
+
+  if (function_exists('rae_wompi_expire_pending_reservations')) {
+    rae_wompi_expire_pending_reservations();
+  }
+
+  $table = $wpdb->prefix . 'reservas_aseo';
+  $jornadas_permitidas = ['manana', 'tarde', 'completa'];
+
+  if (!in_array($jornada, $jornadas_permitidas, true)) {
+    return true;
+  }
+
+  $jornadas_conflicto = $jornada === 'completa'
+    ? $jornadas_permitidas
+    : [$jornada, 'completa'];
+  $estados_bloqueantes = ['pendiente', 'pendiente_pago', 'pagado', 'confirmada', 'pago_revision'];
+  $placeholders_jornadas = implode(', ', array_fill(0, count($jornadas_conflicto), '%s'));
+  $placeholders_estados = implode(', ', array_fill(0, count($estados_bloqueantes), '%s'));
+  $params = array_merge([$persona_id, $fecha], $jornadas_conflicto, $estados_bloqueantes);
+  $count = $wpdb->get_var(
+    $wpdb->prepare(
+      "SELECT COUNT(*) FROM $table WHERE persona_id = %d AND fecha = %s AND jornada IN ($placeholders_jornadas) AND estado IN ($placeholders_estados)",
+      $params
+    )
+  );
+
+  return absint($count) > 0;
 }

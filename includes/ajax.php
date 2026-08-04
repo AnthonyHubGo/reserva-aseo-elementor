@@ -68,6 +68,12 @@ function rae_guardar_reserva() {
     wp_send_json_error('La jornada no es válida.');
   }
 
+  $persona = get_post($persona_id);
+
+  if (!$persona || $persona->post_type !== 'personal_aseo' || $persona->post_status !== 'publish') {
+    wp_send_json_error('La persona seleccionada no es válida.');
+  }
+
   if (function_exists('rae_personal_aseo_disponible') && !rae_personal_aseo_disponible($persona_id, $fecha)) {
     wp_send_json_error('La persona seleccionada no está disponible para reservas.');
   }
@@ -77,28 +83,18 @@ function rae_guardar_reserva() {
   }
 
   $amount_cop = function_exists('rae_wompi_amount_for_jornada') ? rae_wompi_amount_for_jornada($jornada) : 0;
+  $created_at = current_time('mysql');
 
   if ($amount_cop <= 0) {
     wp_send_json_error('No hay un valor configurado para la jornada seleccionada.');
   }
 
-  $jornadas_conflicto = $jornada === 'completa'
-    ? $jornadas_permitidas
-    : [$jornada, 'completa'];
-  $estados_bloqueantes = ['pendiente', 'pendiente_pago', 'pagado', 'confirmada'];
+  if (!rae_adquirir_bloqueo_reserva($persona_id, $fecha)) {
+    wp_send_json_error('Hay otra reserva procesándose para esa fecha. Intenta nuevamente en unos segundos.');
+  }
 
-  $placeholders_jornadas = implode(', ', array_fill(0, count($jornadas_conflicto), '%s'));
-  $placeholders_estados = implode(', ', array_fill(0, count($estados_bloqueantes), '%s'));
-  $parametros_conflicto = array_merge([$persona_id, $fecha], $jornadas_conflicto, $estados_bloqueantes);
-
-  $existe = $wpdb->get_var(
-    $wpdb->prepare(
-      "SELECT COUNT(*) FROM $table WHERE persona_id = %d AND fecha = %s AND jornada IN ($placeholders_jornadas) AND estado IN ($placeholders_estados)",
-      $parametros_conflicto
-    )
-  );
-
-  if ($existe > 0) {
+  if (rae_reserva_tiene_conflicto($persona_id, $fecha, $jornada)) {
+    rae_liberar_bloqueo_reserva($persona_id, $fecha);
     wp_send_json_error('Esta persona ya tiene una reserva que entra en conflicto para esa fecha.');
   }
 
@@ -119,9 +115,12 @@ function rae_guardar_reserva() {
       'payment_status' => 'pending',
       'payment_gateway' => 'wompi',
       'payment_amount_cop' => $amount_cop,
+      'created_at' => $created_at,
     ],
-    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d']
+    ['%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s']
   );
+
+  rae_liberar_bloqueo_reserva($persona_id, $fecha);
 
   if (!$insertado) {
     wp_send_json_error('No se pudo guardar la reserva.');
@@ -145,6 +144,7 @@ function rae_guardar_reserva() {
     'estado' => 'pendiente_pago',
     'payment_reference' => $reference,
     'payment_amount_cop' => $amount_cop,
+    'created_at' => $created_at,
   ];
 
   $payment_updated = $wpdb->update(
@@ -158,6 +158,7 @@ function rae_guardar_reserva() {
   );
 
   if ($payment_updated === false) {
+    $wpdb->delete($table, ['id' => $reserva_id], ['%d']);
     wp_send_json_error('La reserva fue creada, pero no se pudo preparar el pago.');
   }
 

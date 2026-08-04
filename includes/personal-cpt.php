@@ -334,8 +334,12 @@ function rae_sanitizar_motivos_no_disponibilidad_fechas($motivos_json, $fechas_v
 function rae_obtener_ocupaciones_personal($post_id) {
   global $wpdb;
 
+  if (function_exists('rae_wompi_expire_pending_reservations')) {
+    rae_wompi_expire_pending_reservations();
+  }
+
   $table = $wpdb->prefix . 'reservas_aseo';
-  $estados_bloqueantes = ['pendiente_pago', 'pagado', 'confirmada'];
+  $estados_bloqueantes = ['pendiente_pago', 'pagado', 'confirmada', 'pago_revision'];
   $placeholders_estados = implode(', ', array_fill(0, count($estados_bloqueantes), '%s'));
   $reservas = $wpdb->get_results(
     $wpdb->prepare(

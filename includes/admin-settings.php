@@ -61,18 +61,29 @@ add_action('admin_init', function () {
     delete_option('rae_notification_email');
   }
 
+  $stored_wompi_settings = function_exists('rae_wompi_default_settings')
+    ? wp_parse_args((array) get_option('rae_wompi_settings', []), rae_wompi_default_settings())
+    : (array) get_option('rae_wompi_settings', []);
+  $private_key = sanitize_text_field(wp_unslash($_POST['rae_wompi_private_key'] ?? ''));
+  $events_secret = sanitize_text_field(wp_unslash($_POST['rae_wompi_events_secret'] ?? ''));
+  $integrity_secret = sanitize_text_field(wp_unslash($_POST['rae_wompi_integrity_secret'] ?? ''));
+
   $wompi_settings = [
     'mode' => isset($_POST['rae_wompi_mode']) && sanitize_text_field(wp_unslash($_POST['rae_wompi_mode'])) === 'production'
       ? 'production'
       : 'sandbox',
     'public_key' => sanitize_text_field(wp_unslash($_POST['rae_wompi_public_key'] ?? '')),
-    'private_key' => sanitize_text_field(wp_unslash($_POST['rae_wompi_private_key'] ?? '')),
-    'events_secret' => sanitize_text_field(wp_unslash($_POST['rae_wompi_events_secret'] ?? '')),
-    'integrity_secret' => sanitize_text_field(wp_unslash($_POST['rae_wompi_integrity_secret'] ?? '')),
+    'private_key' => $private_key !== '' ? $private_key : ($stored_wompi_settings['private_key'] ?? ''),
+    'events_secret' => $events_secret !== '' ? $events_secret : ($stored_wompi_settings['events_secret'] ?? ''),
+    'integrity_secret' => $integrity_secret !== '' ? $integrity_secret : ($stored_wompi_settings['integrity_secret'] ?? ''),
     'currency' => 'COP',
     'amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_amount_cop'] ?? ''))),
     'half_day_amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_half_day_amount_cop'] ?? ''))),
     'full_day_amount_cop' => preg_replace('/[^0-9]/', '', sanitize_text_field(wp_unslash($_POST['rae_wompi_full_day_amount_cop'] ?? ''))),
+    'payment_expiration_minutes' => max(
+      10,
+      min(60, absint(wp_unslash($_POST['rae_wompi_payment_expiration_minutes'] ?? 20)))
+    ),
   ];
 
   update_option('rae_wompi_settings', $wompi_settings, false);
@@ -98,6 +109,9 @@ function rae_render_admin_settings() {
   $logo_url = $logo_id ? wp_get_attachment_image_url($logo_id, 'medium') : '';
   $notification_email = sanitize_email(get_option('rae_notification_email', ''));
   $wompi = function_exists('rae_wompi_settings') ? rae_wompi_settings() : [];
+  $wompi_credentials_valid = function_exists('rae_wompi_credentials_match_mode')
+    ? rae_wompi_credentials_match_mode($wompi)
+    : false;
   $webhook_url = rest_url('sat-reservas/v1/wompi-webhook');
   $webhook_logs = get_option('rae_wompi_webhook_logs', []);
 
@@ -114,6 +128,12 @@ function rae_render_admin_settings() {
     <?php if ($settings_updated === 'true'): ?>
       <div class="notice notice-success is-dismissible">
         <p>Configuración guardada correctamente.</p>
+      </div>
+    <?php endif; ?>
+
+    <?php if (!$wompi_credentials_valid): ?>
+      <div class="notice notice-warning">
+        <p>La configuración de Wompi está incompleta o contiene credenciales que no corresponden con el ambiente seleccionado.</p>
       </div>
     <?php endif; ?>
 
@@ -180,18 +200,20 @@ function rae_render_admin_settings() {
 
                 <p>
                   <label for="rae_wompi_private_key"><strong>Llave privada</strong></label><br>
-                  <input type="password" class="regular-text" id="rae_wompi_private_key" name="rae_wompi_private_key" value="<?php echo esc_attr($wompi['private_key'] ?? ''); ?>" autocomplete="new-password">
+                  <input type="password" class="regular-text" id="rae_wompi_private_key" name="rae_wompi_private_key" value="" placeholder="<?php echo esc_attr(!empty($wompi['private_key']) ? 'Configurado' : ''); ?>" autocomplete="new-password">
+                  <span class="description">Déjala vacía para conservar la llave actual.</span>
                 </p>
 
                 <p>
                   <label for="rae_wompi_events_secret"><strong>Llave de eventos / webhook</strong></label><br>
-                  <input type="password" class="regular-text" id="rae_wompi_events_secret" name="rae_wompi_events_secret" value="<?php echo esc_attr($wompi['events_secret'] ?? ''); ?>" autocomplete="new-password">
+                  <input type="password" class="regular-text" id="rae_wompi_events_secret" name="rae_wompi_events_secret" value="" placeholder="<?php echo esc_attr(!empty($wompi['events_secret']) ? 'Configurado' : ''); ?>" autocomplete="new-password">
+                  <span class="description">Déjala vacía para conservar el secreto actual.</span>
                 </p>
 
                 <p>
                   <label for="rae_wompi_integrity_secret"><strong>Secreto de integridad</strong></label><br>
-                  <input type="password" class="regular-text" id="rae_wompi_integrity_secret" name="rae_wompi_integrity_secret" value="<?php echo esc_attr($wompi['integrity_secret'] ?? ''); ?>" autocomplete="new-password">
-                  <span class="description">Necesario para firmar el Web Checkout sin exponer secretos en el frontend.</span>
+                  <input type="password" class="regular-text" id="rae_wompi_integrity_secret" name="rae_wompi_integrity_secret" value="" placeholder="<?php echo esc_attr(!empty($wompi['integrity_secret']) ? 'Configurado' : ''); ?>" autocomplete="new-password">
+                  <span class="description">Déjalo vacío para conservar el secreto actual. Se usa para firmar el Web Checkout sin exponerlo en el frontend.</span>
                 </p>
 
                 <p>
@@ -214,6 +236,20 @@ function rae_render_admin_settings() {
                 <p class="description">
                   El monto enviado a Wompi se calcula según la jornada elegida por el cliente. Los valores se guardan sin puntos ni símbolos.
                 </p>
+
+                <p>
+                  <label for="rae_wompi_payment_expiration_minutes"><strong>Tiempo para completar el pago</strong></label><br>
+                  <input
+                    type="number"
+                    min="10"
+                    max="60"
+                    step="1"
+                    id="rae_wompi_payment_expiration_minutes"
+                    name="rae_wompi_payment_expiration_minutes"
+                    value="<?php echo esc_attr(rae_wompi_payment_expiration_minutes($wompi)); ?>"
+                  > minutos
+                </p>
+                <p class="description">Wompi cerrará el checkout al terminar este tiempo. El horario se liberará 5 minutos después como margen de procesamiento.</p>
 
                 <p>
                   <strong>Moneda:</strong> COP
