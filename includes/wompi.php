@@ -168,10 +168,12 @@ function rae_wompi_return_url($reference = '') {
   return add_query_arg($args, home_url('/'));
 }
 
-function rae_wompi_checkout_url($reserva, $reference, $amount_in_cents) {
+function rae_wompi_checkout_url($reserva, $reference, $amount_in_cents, $expiration_time = '') {
   $settings = rae_wompi_settings();
   $currency = $settings['currency'];
-  $expiration_time = rae_wompi_checkout_expiration_time($reserva->created_at ?? '', $settings);
+  $expiration_time = $expiration_time !== ''
+    ? $expiration_time
+    : rae_wompi_checkout_expiration_time($reserva->created_at ?? '', $settings);
   $params = [
     'public-key' => $settings['public_key'],
     'currency' => $currency,
@@ -189,6 +191,120 @@ function rae_wompi_checkout_url($reserva, $reference, $amount_in_cents) {
   return add_query_arg(array_filter($params, static function ($value) {
     return $value !== '';
   }), 'https://checkout.wompi.co/p/');
+}
+
+function rae_wompi_checkout_expiration_timestamp($reserva) {
+  if (!$reserva) {
+    return 0;
+  }
+
+  try {
+    return (new DateTimeImmutable(
+      rae_wompi_checkout_expiration_time($reserva->created_at ?? '')
+    ))->getTimestamp();
+  } catch (Exception $exception) {
+    return 0;
+  }
+}
+
+function rae_wompi_checkout_expiration_time_from_timestamp($timestamp) {
+  $timestamp = absint($timestamp);
+
+  if ($timestamp <= 0) {
+    return '';
+  }
+
+  return (new DateTimeImmutable('@' . $timestamp))
+    ->setTimezone(new DateTimeZone('UTC'))
+    ->format('Y-m-d\TH:i:s.000\Z');
+}
+
+function rae_wompi_resume_payment_signature($reserva, $expires) {
+  $reservation_id = absint($reserva->id ?? 0);
+  $reference = (string) ($reserva->payment_reference ?? '');
+  $email = strtolower((string) ($reserva->cliente_email ?? ''));
+  $payload = implode('|', [$reservation_id, $reference, absint($expires), $email]);
+
+  return hash_hmac('sha256', $payload, wp_salt('auth'));
+}
+
+function rae_wompi_resume_payment_url($reserva) {
+  $expires = rae_wompi_checkout_expiration_timestamp($reserva);
+
+  if (!$reserva || empty($reserva->id) || empty($reserva->payment_reference) || $expires <= 0) {
+    return '';
+  }
+
+  return add_query_arg([
+    'rae_wompi_resume' => '1',
+    'reservation' => absint($reserva->id),
+    'expires' => $expires,
+    'token' => rae_wompi_resume_payment_signature($reserva, $expires),
+  ], home_url('/'));
+}
+
+function rae_wompi_resume_payment_link_is_valid($reserva, $expires, $token, $now = null) {
+  $expires = absint($expires);
+  $token = strtolower(trim((string) $token));
+  $current_timestamp = $now === null ? time() : absint($now);
+
+  if (
+    !$reserva ||
+    empty($reserva->id) ||
+    empty($reserva->payment_reference) ||
+    $expires <= 0 ||
+    $current_timestamp > $expires ||
+    !rae_wompi_resume_payment_signature_is_valid($reserva, $expires, $token)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function rae_wompi_resume_payment_signature_is_valid($reserva, $expires, $token) {
+  $expires = absint($expires);
+  $token = strtolower(trim((string) $token));
+
+  if (
+    !$reserva ||
+    $expires <= 0 ||
+    !preg_match('/^[a-f0-9]{64}$/', $token)
+  ) {
+    return false;
+  }
+
+  return hash_equals(rae_wompi_resume_payment_signature($reserva, $expires), $token);
+}
+
+function rae_wompi_render_resume_page($title, $message, $action_url = '', $action_label = '') {
+  status_header(200);
+  nocache_headers();
+  ?>
+  <!doctype html>
+  <html <?php language_attributes(); ?>>
+    <head>
+      <meta charset="<?php bloginfo('charset'); ?>">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title><?php echo esc_html($title); ?></title>
+      <?php wp_head(); ?>
+    </head>
+    <body <?php body_class('rae-wompi-resume'); ?>>
+      <main style="box-sizing:border-box;max-width:620px;margin:64px auto;padding:32px;border:1px solid #acdbe2;border-radius:18px;background:#fff;font-family:Arial,sans-serif;text-align:center;box-shadow:0 18px 42px rgba(9,76,105,.12);">
+        <img src="<?php echo esc_url(RAE_URL . 'assets/images/LogoSAT.webp'); ?>" alt="SAT Soluciones a Tiempo" style="display:block;width:180px;max-width:70%;height:auto;margin:0 auto 24px;padding:14px 18px;border-radius:12px;background:#09939a;">
+        <h1 style="margin:0 0 14px;color:#094c69;font-size:28px;line-height:1.25;"><?php echo esc_html($title); ?></h1>
+        <p style="margin:0;color:#52666a;font-size:16px;line-height:1.65;"><?php echo esc_html($message); ?></p>
+        <?php if ($action_url !== '' && $action_label !== ''): ?>
+          <p style="margin:26px 0 0;">
+            <a href="<?php echo esc_url($action_url); ?>" style="display:inline-block;padding:13px 20px;border-radius:10px;background:#09939a;color:#fff;font-weight:700;text-decoration:none;"><?php echo esc_html($action_label); ?></a>
+          </p>
+        <?php endif; ?>
+      </main>
+      <?php wp_footer(); ?>
+    </body>
+  </html>
+  <?php
+  exit;
 }
 
 function rae_wompi_log($message, $context = []) {
@@ -673,6 +789,131 @@ function rae_wompi_verify_reserva_payment($reserva) {
     'transaction' => $transaction,
   ]);
 }
+
+function rae_wompi_get_reservation_by_id($reservation_id) {
+  global $wpdb;
+
+  $table = $wpdb->prefix . 'reservas_aseo';
+
+  return $wpdb->get_row(
+    $wpdb->prepare("SELECT * FROM $table WHERE id = %d", absint($reservation_id))
+  );
+}
+
+function rae_wompi_handle_resume_payment() {
+  $is_resume = isset($_GET['rae_wompi_resume'])
+    ? sanitize_text_field(wp_unslash($_GET['rae_wompi_resume']))
+    : '';
+
+  if ($is_resume !== '1') {
+    return;
+  }
+
+  $reservation_id = isset($_GET['reservation']) ? absint(wp_unslash($_GET['reservation'])) : 0;
+  $expires = isset($_GET['expires']) ? absint(wp_unslash($_GET['expires'])) : 0;
+  $token = isset($_GET['token']) ? sanitize_text_field(wp_unslash($_GET['token'])) : '';
+  $reservation = $reservation_id ? rae_wompi_get_reservation_by_id($reservation_id) : null;
+  $home_url = home_url('/');
+
+  if (!$reservation || !rae_wompi_resume_payment_signature_is_valid($reservation, $expires, $token)) {
+    rae_wompi_render_resume_page(
+      'Enlace no válido',
+      'No fue posible validar este enlace de pago. Solicita una nueva reserva desde nuestro sitio.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  if (($reservation->payment_gateway ?? '') !== 'wompi') {
+    rae_wompi_render_resume_page(
+      'Pago no disponible',
+      'Esta reserva no tiene un pago pendiente mediante Wompi.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  rae_wompi_verify_reserva_payment($reservation);
+  $reservation = rae_wompi_get_reservation_by_id($reservation_id);
+  $payment_status = strtolower((string) ($reservation->payment_status ?? ''));
+  $reservation_status = strtolower((string) ($reservation->estado ?? ''));
+
+  if ($payment_status === 'approved' || $reservation_status === 'confirmada') {
+    rae_wompi_render_resume_page(
+      'Pago aprobado',
+      'Esta reserva ya se encuentra pagada y confirmada. No es necesario realizar otro pago.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  if ($reservation_status === 'pago_revision') {
+    rae_wompi_render_resume_page(
+      'Pago en revisión',
+      'Recibimos un pago después del vencimiento de la reserva. Nuestro equipo debe revisar la disponibilidad antes de confirmarla.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  if (
+    $reservation_status === 'pendiente_pago' &&
+    in_array($payment_status, ['pending', 'pending_vobo'], true) &&
+    !empty($reservation->wompi_transaction_id)
+  ) {
+    rae_wompi_render_resume_page(
+      'Pago en procesamiento',
+      'Wompi todavía está procesando una transacción para esta reserva. Te notificaremos por correo cuando exista un resultado final.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  if (!rae_wompi_resume_payment_link_is_valid($reservation, $expires, $token)) {
+    if (function_exists('rae_wompi_expire_pending_reservations')) {
+      rae_wompi_expire_pending_reservations();
+    }
+
+    rae_wompi_render_resume_page(
+      'El enlace de pago expiró',
+      'El tiempo para completar este pago terminó. La disponibilidad deberá comprobarse nuevamente antes de crear otra reserva.',
+      $home_url,
+      'Comprobar disponibilidad'
+    );
+  }
+
+  if ($reservation_status !== 'pendiente_pago' || !in_array($payment_status, ['', 'pending'], true)) {
+    rae_wompi_render_resume_page(
+      'Pago no disponible',
+      'Esta reserva ya no admite continuar con el pago. Revisa el correo con la actualización de su estado.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  $amount_in_cents = absint($reservation->payment_amount_cop ?? 0) * 100;
+  $checkout_url = rae_wompi_checkout_url(
+    $reservation,
+    (string) $reservation->payment_reference,
+    $amount_in_cents,
+    rae_wompi_checkout_expiration_time_from_timestamp($expires)
+  );
+
+  if ($amount_in_cents <= 0 || strpos($checkout_url, 'https://checkout.wompi.co/p/') !== 0) {
+    rae_wompi_render_resume_page(
+      'No pudimos preparar el pago',
+      'La información de pago de esta reserva está incompleta. Comunícate con nuestro equipo antes de intentarlo nuevamente.',
+      $home_url,
+      'Volver al sitio'
+    );
+  }
+
+  nocache_headers();
+  wp_redirect($checkout_url, 302, 'SAT Reservas');
+  exit;
+}
+
+add_action('template_redirect', 'rae_wompi_handle_resume_payment', 8);
 
 add_action('template_redirect', function () {
   $is_return = isset($_GET['rae_wompi_return']) ? sanitize_text_field(wp_unslash($_GET['rae_wompi_return'])) : '';

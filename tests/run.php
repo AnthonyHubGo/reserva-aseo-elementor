@@ -18,6 +18,7 @@ function wp_parse_args($args, $defaults = []) { return array_merge($defaults, (a
 function wp_generate_password() { return 'TESTREFERENCE'; }
 function wp_timezone() { return new DateTimeZone('America/Bogota'); }
 function wp_json_encode($value) { return json_encode($value); }
+function wp_salt() { return 'test-wordpress-auth-salt'; }
 function current_time() { return '2026-08-04 12:00:00'; }
 function is_email($value) { return filter_var($value, FILTER_VALIDATE_EMAIL) !== false; }
 function rae_enviar_email_reserva_estado() { return true; }
@@ -143,6 +144,47 @@ rae_test_assert(
   rae_wompi_expiration_cutoff('2026-08-04 14:00:00', $sandbox) === '2026-08-04 13:35:00',
   'El horario no conserva los cinco minutos de margen después de expirar el checkout.'
 );
+
+$resume_reservation = (object) [
+  'id' => 31,
+  'cliente_email' => 'cliente@example.com',
+  'payment_reference' => 'RAE-31-TEST',
+  'created_at' => '2026-08-04 13:00:00',
+];
+$resume_expires = (new DateTimeImmutable($expiration_time))->getTimestamp();
+$resume_token = rae_wompi_resume_payment_signature($resume_reservation, $resume_expires);
+rae_test_assert(
+  rae_wompi_resume_payment_signature_is_valid($resume_reservation, $resume_expires, $resume_token),
+  'Un enlace auténtico de recuperación fue rechazado.'
+);
+rae_test_assert(
+  rae_wompi_resume_payment_link_is_valid($resume_reservation, $resume_expires, $resume_token, $resume_expires - 1),
+  'Un enlace de recuperación vigente fue rechazado.'
+);
+rae_test_assert(
+  !rae_wompi_resume_payment_link_is_valid($resume_reservation, $resume_expires, $resume_token, $resume_expires + 1),
+  'Un enlace de recuperación vencido fue aceptado.'
+);
+rae_test_assert(
+  !rae_wompi_resume_payment_signature_is_valid($resume_reservation, $resume_expires, str_repeat('0', 64)),
+  'Un token de recuperación alterado fue aceptado.'
+);
+rae_test_assert(
+  !rae_wompi_resume_payment_signature_is_valid($resume_reservation, $resume_expires + 60, $resume_token),
+  'Un enlace pudo ampliar su vencimiento original.'
+);
+rae_test_assert(
+  rae_wompi_checkout_expiration_time_from_timestamp($resume_expires) === $expiration_time,
+  'No se conservó la expiración original al reconstruir el checkout.'
+);
+$changed_expiration_settings = $sandbox;
+$changed_expiration_settings['payment_expiration_minutes'] = 10;
+$GLOBALS['rae_test_options']['rae_wompi_settings'] = $changed_expiration_settings;
+rae_test_assert(
+  rae_wompi_resume_payment_link_is_valid($resume_reservation, $resume_expires, $resume_token, $resume_expires - 1),
+  'Cambiar la configuración invalidó una reserva creada previamente.'
+);
+$GLOBALS['rae_test_options']['rae_wompi_settings'] = $sandbox;
 
 $lock_a = rae_reserva_lock_name(10, '2026-08-20');
 $lock_b = rae_reserva_lock_name(10, '2026-08-21');

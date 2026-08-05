@@ -83,7 +83,35 @@ function rae_email_section($title, $rows) {
     </table>';
 }
 
-function rae_email_template($heading, $intro, $cliente_rows, $reserva_rows, $footer_text) {
+function rae_email_action_button($url, $label, $caption = '') {
+  if ($url === '' || $label === '') {
+    return '';
+  }
+
+  $caption_html = $caption !== ''
+    ? '<p style="margin: 10px 0 0; color: #52666a; font-size: 13px; line-height: 1.5;">' . esc_html($caption) . '</p>'
+    : '';
+
+  return '
+    <div style="margin: 24px 0; text-align: center;">
+      <a href="' . esc_url($url) . '" style="display: inline-block; padding: 13px 22px; border-radius: 10px; background: #09939a; color: #ffffff; font-size: 15px; font-weight: 800; text-decoration: none;">' . esc_html($label) . '</a>
+      ' . $caption_html . '
+    </div>';
+}
+
+function rae_email_payment_expiration_label($reserva) {
+  if (!function_exists('rae_wompi_checkout_expiration_timestamp')) {
+    return '';
+  }
+
+  $timestamp = rae_wompi_checkout_expiration_timestamp($reserva);
+
+  return $timestamp > 0
+    ? wp_date('j \d\e F \d\e Y, g:i a', $timestamp, wp_timezone())
+    : '';
+}
+
+function rae_email_template($heading, $intro, $cliente_rows, $reserva_rows, $footer_text, $action_html = '') {
   return '<!doctype html>
 <html>
   <head>
@@ -110,6 +138,7 @@ function rae_email_template($heading, $intro, $cliente_rows, $reserva_rows, $foo
               <td style="padding: 28px 26px; border: 1px solid #aadde3; border-top: 0; border-radius: 0 0 14px 14px; background: #ffffff; box-shadow: 0 18px 42px rgba(9, 76, 105, 0.12);">
                 <h1 style="margin: 0 0 16px; color: #094c69; font-size: 24px; line-height: 1.25;">' . esc_html($heading) . '</h1>
                 <div style="color: #273b44; font-size: 16px; line-height: 1.65;">' . wp_kses_post(wpautop($intro)) . '</div>
+                ' . $action_html . '
                 ' . rae_email_section('Detalles del cliente', $cliente_rows) . '
                 ' . rae_email_section('Detalles de la reserva', $reserva_rows) . '
                 <p style="margin: 26px 0 0; color: #273b44; font-size: 16px; line-height: 1.65;">' . esc_html($footer_text) . '</p>
@@ -173,15 +202,29 @@ function rae_enviar_email_reserva_creada($reserva) {
 
   $asunto = rae_email_asunto_estado('pendiente_pago');
   $intro = sprintf(
-    'Hola %s,<br><br>Gracias por reservar con SAT.<br><br>Hemos recibido tu solicitud de servicio de aseo doméstico. Tu reserva se encuentra pendiente de pago. Te enviaremos una nueva notificación cuando Wompi confirme el resultado del pago.',
+    'Hola %s,<br><br>Gracias por reservar con SAT.<br><br>Hemos recibido tu solicitud de servicio de aseo doméstico. Tu reserva se encuentra pendiente de pago. Si cerraste Wompi o perdiste la conexión, puedes continuar desde el botón mientras el enlace siga vigente.',
     esc_html($reserva->cliente_nombre)
   );
+  $expiration_label = rae_email_payment_expiration_label($reserva);
+  $resume_url = function_exists('rae_wompi_resume_payment_url')
+    ? rae_wompi_resume_payment_url($reserva)
+    : '';
+  $reserva_rows = rae_email_reserva_rows($reserva, 'Pendiente de pago', 'Estado');
+
+  if ($expiration_label !== '') {
+    $reserva_rows[] = rae_email_row('Pago disponible hasta', $expiration_label);
+  }
+
+  $action_caption = $expiration_label !== ''
+    ? 'Este enlace estará disponible hasta ' . $expiration_label . '. El tiempo no se reinicia al abrirlo nuevamente.'
+    : 'El enlace estará disponible únicamente mientras la reserva continúe pendiente de pago.';
   $mensaje = rae_email_template(
-    'Hemos recibido tu solicitud de reserva',
+    'Completa el pago de tu reserva',
     $intro,
     rae_email_cliente_rows($reserva),
-    rae_email_reserva_rows($reserva, 'Pendiente de pago', 'Estado'),
-    'Gracias por confiar en SAT.'
+    $reserva_rows,
+    'Te enviaremos una nueva notificación cuando Wompi confirme el resultado del pago. Gracias por confiar en SAT.',
+    rae_email_action_button($resume_url, 'Continuar con el pago', $action_caption)
   );
 
   $cliente_enviado = wp_mail($reserva->cliente_email, $asunto, $mensaje, rae_email_headers());
