@@ -57,7 +57,7 @@ function rae_register_reserva_assets() {
 
   wp_register_style(
     'rae-flatpickr',
-    'https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css',
+    'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css',
     [],
     '4.6.13'
   );
@@ -66,12 +66,12 @@ function rae_register_reserva_assets() {
     'rae-css',
     RAE_URL . 'assets/css/style.css',
     ['rae-nunito', 'rae-flatpickr'],
-    '1.1.1'
+    '1.2.0'
   );
 
   wp_register_script(
     'rae-flatpickr',
-    'https://cdn.jsdelivr.net/npm/flatpickr',
+    'https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js',
     [],
     '4.6.13',
     true
@@ -81,7 +81,7 @@ function rae_register_reserva_assets() {
     'rae-js',
     RAE_URL . 'assets/js/app.js',
     ['rae-flatpickr'],
-    '1.1.1',
+    '1.2.0',
     true
   );
 

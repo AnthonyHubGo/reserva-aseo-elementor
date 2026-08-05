@@ -12,10 +12,105 @@ function raeInitReservationForm(form) {
   const prevButton = form.querySelector('.rae-carousel-prev');
   const nextButton = form.querySelector('.rae-carousel-next');
   const submitButton = form.querySelector('button[type="submit"]');
+  const stepPanels = Array.from(form.querySelectorAll('[data-step-panel]'));
+  const stepIndicators = Array.from(form.querySelectorAll('[data-step-indicator]'));
+  const nextStepButtons = Array.from(form.querySelectorAll('[data-next-step]'));
+  const previousStepButtons = Array.from(form.querySelectorAll('[data-previous-step]'));
+  const msg = form.querySelector('#rae-msg');
   const dateConfig = window.raeReservaConfig || {};
   const today = dateConfig.today || new Date().toISOString().slice(0, 10);
   const holidays = dateConfig.holidays || {};
   let carouselPage = 0;
+  let currentStep = 1;
+
+  function setMessage(message) {
+    if (msg) {
+      msg.innerText = message || '';
+    }
+  }
+
+  function showStep(step, moveFocus = true) {
+    const nextStep = Math.min(3, Math.max(1, Number(step) || 1));
+
+    currentStep = nextStep;
+
+    stepPanels.forEach(panel => {
+      const panelStep = Number(panel.dataset.stepPanel);
+      const isActive = panelStep === currentStep;
+
+      panel.hidden = !isActive;
+      panel.classList.toggle('is-active', isActive);
+    });
+
+    stepIndicators.forEach(indicator => {
+      const indicatorStep = Number(indicator.dataset.stepIndicator);
+      const isActive = indicatorStep === currentStep;
+
+      indicator.classList.toggle('is-active', isActive);
+      indicator.classList.toggle('is-complete', indicatorStep < currentStep);
+
+      if (isActive) {
+        indicator.setAttribute('aria-current', 'step');
+      } else {
+        indicator.removeAttribute('aria-current');
+      }
+    });
+
+    setMessage('');
+
+    const activePanel = stepPanels.find(panel => Number(panel.dataset.stepPanel) === currentStep);
+    const heading = activePanel ? activePanel.querySelector('h3') : null;
+
+    if (moveFocus && heading && typeof heading.focus === 'function') {
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+    }
+
+    if (moveFocus) {
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    updateCarousel();
+  }
+
+  function getInvalidControl(panel) {
+    if (!panel) return null;
+
+    return Array.from(panel.querySelectorAll('input, select, textarea'))
+      .find(control => !control.disabled && !control.checkValidity()) || null;
+  }
+
+  function validateStep(step) {
+    const panel = stepPanels.find(item => Number(item.dataset.stepPanel) === Number(step));
+    const invalidControl = getInvalidControl(panel);
+
+    if (invalidControl) {
+      invalidControl.reportValidity();
+      invalidControl.focus({ preventScroll: false });
+      return false;
+    }
+
+    if (Number(step) === 2) {
+      const dateError = isInvalidReservationDate(dateInput ? dateInput.value : '');
+
+      if (dateError) {
+        setMessage(dateError);
+
+        if (dateInput) {
+          dateInput.focus();
+        }
+
+        return false;
+      }
+
+      if (submitButton && submitButton.disabled) {
+        setMessage('No se puede continuar porque no hay personal disponible para esta fecha y jornada.');
+        return false;
+      }
+    }
+
+    return true;
+  }
 
   function isInvalidReservationDate(date) {
     if (!date) {
@@ -34,11 +129,10 @@ function raeInitReservationForm(form) {
   }
 
   function getCardsPerPage() {
-    const viewportWidth = personalViewport ? personalViewport.getBoundingClientRect().width : window.innerWidth;
+    if (window.matchMedia('(max-width: 520px)').matches) return 1;
+    if (window.matchMedia('(max-width: 800px)').matches) return 2;
 
-    if (viewportWidth < 980) return 2;
-
-    return 4;
+    return 3;
   }
 
   function getVisibleCards() {
@@ -176,12 +270,52 @@ function raeInitReservationForm(form) {
     });
   }
 
+  nextStepButtons.forEach(button => {
+    button.addEventListener('click', function () {
+      if (!validateStep(currentStep)) return;
+
+      showStep(Number(button.dataset.nextStep));
+    });
+  });
+
+  previousStepButtons.forEach(button => {
+    button.addEventListener('click', function () {
+      showStep(Number(button.dataset.previousStep));
+    });
+  });
+
   window.addEventListener('resize', updateCarousel);
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
-    const msg = form.querySelector('#rae-msg');
+    for (let step = 1; step <= 3; step += 1) {
+      const panel = stepPanels.find(item => Number(item.dataset.stepPanel) === step);
+      const invalidControl = getInvalidControl(panel);
+
+      if (invalidControl) {
+        showStep(step);
+        invalidControl.reportValidity();
+        invalidControl.focus({ preventScroll: false });
+        return;
+      }
+
+      if (step === 2) {
+        const dateError = isInvalidReservationDate(dateInput ? dateInput.value : '');
+
+        if (dateError || (submitButton && submitButton.disabled)) {
+          showStep(step);
+          setMessage(dateError || 'No se puede continuar porque no hay personal disponible para esta fecha y jornada.');
+
+          if (dateError && dateInput) {
+            dateInput.focus();
+          }
+
+          return;
+        }
+      }
+    }
+
     const data = new FormData(form);
     const dateError = isInvalidReservationDate(data.get('fecha'));
     const hasNoAvailability = submitButton && submitButton.disabled;
@@ -212,6 +346,11 @@ function raeInitReservationForm(form) {
       msg.innerText = 'Guardando reserva...';
     }
 
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-busy', 'true');
+    }
+
     fetch(rae_ajax.ajax_url, {
       method: 'POST',
       body: data,
@@ -231,15 +370,27 @@ function raeInitReservationForm(form) {
 
           if (resultData.payment_url) {
             window.location.href = resultData.payment_url;
+          } else {
+            showStep(1);
           }
+        } else if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.removeAttribute('aria-busy');
         }
       })
       .catch(() => {
         if (msg) {
           msg.innerText = 'Ocurrió un error al enviar la reserva.';
         }
+
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.removeAttribute('aria-busy');
+        }
       });
   });
+
+  showStep(1, false);
 }
 
 function raeInitReservationForms(root) {
