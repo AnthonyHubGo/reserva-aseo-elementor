@@ -397,6 +397,72 @@ function rae_wompi_validate_event_signature($event, $request) {
   return hash_equals(strtolower($received), strtolower($calculated));
 }
 
+function rae_wompi_record_payment_attempt($reserva, $transaction, $raw_event = null) {
+  global $wpdb;
+
+  if (!$reserva || !is_array($transaction)) {
+    return false;
+  }
+
+  $transaction_id = sanitize_text_field($transaction['id'] ?? '');
+  $reference = sanitize_text_field($transaction['reference'] ?? '');
+
+  if ($transaction_id === '' || $reference === '') {
+    return false;
+  }
+
+  $table = $wpdb->prefix . 'reservas_aseo_pagos';
+  $payment_method = sanitize_text_field(
+    $transaction['payment_method_type']
+      ?? ($transaction['payment_method']['type'] ?? '')
+  );
+  $data = [
+    'reserva_id' => absint($reserva->id),
+    'payment_reference' => $reference,
+    'transaction_id' => $transaction_id,
+    'status' => strtolower(sanitize_text_field($transaction['status'] ?? '')),
+    'payment_method' => $payment_method,
+    'amount_in_cents' => absint($transaction['amount_in_cents'] ?? 0),
+    'currency' => strtoupper(sanitize_text_field($transaction['currency'] ?? '')),
+    'raw_response' => wp_json_encode($raw_event ?: $transaction),
+    'received_at' => current_time('mysql'),
+  ];
+  $formats = ['%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s'];
+  $existing_id = $wpdb->get_var(
+    $wpdb->prepare("SELECT id FROM $table WHERE transaction_id = %s", $transaction_id)
+  );
+
+  if ($existing_id) {
+    return $wpdb->update(
+      $table,
+      $data,
+      ['id' => absint($existing_id)],
+      $formats,
+      ['%d']
+    ) !== false;
+  }
+
+  return $wpdb->insert($table, $data, $formats) !== false;
+}
+
+function rae_wompi_retry_until($stored_retry_until = '') {
+  if ($stored_retry_until !== '') {
+    try {
+      $stored = new DateTimeImmutable($stored_retry_until, wp_timezone());
+
+      if ($stored > new DateTimeImmutable('now', wp_timezone())) {
+        return $stored->format('Y-m-d H:i:s');
+      }
+    } catch (Exception $exception) {
+      // Se genera una nueva ventana válida a continuación.
+    }
+  }
+
+  return (new DateTimeImmutable('now', wp_timezone()))
+    ->modify('+3 minutes')
+    ->format('Y-m-d H:i:s');
+}
+
 function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = null) {
   global $wpdb;
 
@@ -432,20 +498,9 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
   }
 
   $stored_reference = (string) ($reserva->payment_reference ?? '');
-  $stored_transaction_id = (string) ($reserva->wompi_transaction_id ?? '');
 
   if ($stored_reference === '' || !hash_equals($stored_reference, $reference)) {
     rae_wompi_log('La referencia de Wompi no coincide con la reserva', [
-      'reference' => $reference,
-      'transaction_id' => $transaction_id,
-      'reserva_id' => absint($reserva->id),
-    ]);
-
-    return false;
-  }
-
-  if ($stored_transaction_id !== '' && !hash_equals($stored_transaction_id, $transaction_id)) {
-    rae_wompi_log('El ID de transacción no coincide con la reserva', [
       'reference' => $reference,
       'transaction_id' => $transaction_id,
       'reserva_id' => absint($reserva->id),
@@ -461,6 +516,7 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
   $estado_reserva = $reserva->estado;
   $payment_status = strtolower($wompi_status);
   $paid_at = $reserva->paid_at ?? null;
+  $retry_until = $reserva->payment_retry_until ?? null;
 
   if (!in_array($wompi_status, ['APPROVED', 'DECLINED', 'VOIDED', 'ERROR', 'PENDING', 'PENDING_VOBO'], true)) {
     rae_wompi_log('Estado de transacción Wompi desconocido', [
@@ -488,6 +544,14 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
     return false;
   }
 
+  if (!rae_wompi_record_payment_attempt($reserva, $transaction, $raw_event)) {
+    rae_wompi_log('No se pudo registrar el intento de pago', [
+      'reference' => $reference,
+      'transaction_id' => $transaction_id,
+      'reserva_id' => absint($reserva->id),
+    ]);
+  }
+
   if (strtolower((string) ($reserva->payment_status ?? '')) === 'approved' && $wompi_status !== 'APPROVED') {
     rae_wompi_log('Se ignoró una regresión de estado para un pago aprobado', [
       'reference' => $reference,
@@ -499,22 +563,41 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
   }
 
   if ($wompi_status === 'APPROVED') {
-    if ($estado_reserva === 'expirada') {
+    if (in_array($estado_reserva, ['expirada', 'rechazada'], true)) {
       $estado_reserva = 'pago_revision';
     } elseif ($estado_reserva !== 'cancelada') {
       $estado_reserva = 'confirmada';
     }
 
+    $retry_until = null;
+
     if (empty($paid_at)) {
       $paid_at = current_time('mysql');
     }
   } elseif (in_array($wompi_status, ['DECLINED', 'VOIDED', 'ERROR'], true)) {
-    $estado_reserva = 'rechazada';
+    if (!in_array($estado_reserva, ['cancelada', 'expirada', 'rechazada'], true)) {
+      $estado_reserva = 'pendiente_pago';
+      $payment_status = 'retry_available';
+      $retry_until = rae_wompi_retry_until((string) $retry_until);
+    }
   } elseif (in_array($wompi_status, ['PENDING', 'PENDING_VOBO'], true)) {
-    $estado_reserva = 'pendiente_pago';
+    if (!in_array($estado_reserva, ['cancelada', 'expirada', 'rechazada'], true)) {
+      $estado_reserva = 'pendiente_pago';
+      $retry_until = null;
+    }
   }
 
   $payment_response = wp_json_encode($raw_event ?: $transaction);
+  $where = ['id' => absint($reserva->id)];
+  $where_formats = ['%d'];
+
+  // Un pago aprobado siempre debe dominar. Los demás estados sólo pueden
+  // escribir si nadie cambió el estado de pago desde que se leyó la reserva.
+  if ($wompi_status !== 'APPROVED') {
+    $where['payment_status'] = (string) ($reserva->payment_status ?? '');
+    $where_formats[] = '%s';
+  }
+
   $updated = $wpdb->update(
     $table,
     [
@@ -523,18 +606,20 @@ function rae_wompi_update_reserva_from_transaction($transaction, $raw_event = nu
       'wompi_transaction_id' => $transaction_id,
       'payment_gateway' => 'wompi',
       'payment_response' => $payment_response,
+      'payment_retry_until' => $retry_until,
       'paid_at' => $paid_at,
     ],
-    ['id' => absint($reserva->id)],
-    ['%s', '%s', '%s', '%s', '%s', '%s'],
-    ['%d']
+    $where,
+    ['%s', '%s', '%s', '%s', '%s', '%s', '%s'],
+    $where_formats
   );
 
-  if ($updated !== false && $estado_reserva !== $reserva->estado && is_email($reserva->cliente_email)) {
+  if ($updated > 0 && $estado_reserva !== $reserva->estado && is_email($reserva->cliente_email)) {
     $reserva->estado = $estado_reserva;
     $reserva->payment_status = $payment_status;
     $reserva->wompi_transaction_id = $transaction_id;
     $reserva->payment_gateway = 'wompi';
+    $reserva->payment_retry_until = $retry_until;
     $reserva->paid_at = $paid_at;
     if ($estado_reserva === 'pago_revision' && function_exists('rae_enviar_email_notificacion_interna')) {
       rae_enviar_email_notificacion_interna($reserva, $estado_reserva, 'Pago recibido después de caducar la reserva');
@@ -564,6 +649,51 @@ function rae_wompi_expire_pending_reservations($now = '') {
   global $wpdb;
 
   $table = $wpdb->prefix . 'reservas_aseo';
+  try {
+    $current = $now !== ''
+      ? new DateTimeImmutable($now, wp_timezone())
+      : new DateTimeImmutable('now', wp_timezone());
+  } catch (Exception $exception) {
+    $current = new DateTimeImmutable('now', wp_timezone());
+  }
+
+  $current_mysql = $current->format('Y-m-d H:i:s');
+  $retry_reservations = $wpdb->get_results(
+    $wpdb->prepare(
+      "SELECT * FROM $table WHERE estado = %s AND payment_gateway = %s AND payment_status = %s AND payment_retry_until IS NOT NULL AND payment_retry_until <= %s ORDER BY id ASC LIMIT 50",
+      'pendiente_pago',
+      'wompi',
+      'retry_available',
+      $current_mysql
+    )
+  );
+  $rejected = 0;
+
+  foreach ($retry_reservations as $reservation) {
+    $updated = $wpdb->query(
+      $wpdb->prepare(
+        "UPDATE $table SET estado = %s, payment_status = %s, payment_retry_until = NULL WHERE id = %d AND estado = %s AND payment_status = %s AND payment_retry_until IS NOT NULL AND payment_retry_until <= %s",
+        'rechazada',
+        'declined',
+        absint($reservation->id),
+        'pendiente_pago',
+        'retry_available',
+        $current_mysql
+      )
+    );
+
+    if ($updated) {
+      $rejected++;
+      $reservation->estado = 'rechazada';
+      $reservation->payment_status = 'declined';
+      $reservation->payment_retry_until = null;
+
+      if (is_email($reservation->cliente_email ?? '')) {
+        rae_enviar_email_estado_reserva($reservation, 'rechazada');
+      }
+    }
+  }
+
   $cutoff = rae_wompi_expiration_cutoff($now);
   $reservations = $wpdb->get_results(
     $wpdb->prepare(
@@ -581,7 +711,7 @@ function rae_wompi_expire_pending_reservations($now = '') {
   foreach ($reservations as $reservation) {
     $updated = $wpdb->query(
       $wpdb->prepare(
-        "UPDATE $table SET estado = %s, payment_status = %s WHERE id = %d AND estado = %s AND payment_status IN (%s, %s, %s)",
+        "UPDATE $table SET estado = %s, payment_status = %s, payment_retry_until = NULL WHERE id = %d AND estado = %s AND payment_status IN (%s, %s, %s)",
         'expirada',
         'expired',
         absint($reservation->id),
@@ -603,7 +733,7 @@ function rae_wompi_expire_pending_reservations($now = '') {
     }
   }
 
-  return $expired;
+  return $rejected + $expired;
 }
 
 add_filter('cron_schedules', function ($schedules) {
@@ -720,15 +850,28 @@ function rae_wompi_normalize_transaction_response($body, $reference = '') {
   }
 
   if (is_array($data)) {
+    $selected = null;
+    $selected_priority = -1;
+
     foreach ($data as $transaction) {
       if (!is_array($transaction)) {
         continue;
       }
 
       if ($reference === '' || (($transaction['reference'] ?? '') === $reference)) {
-        return $transaction;
+        $status = strtoupper(sanitize_text_field($transaction['status'] ?? ''));
+        $priority = $status === 'APPROVED'
+          ? 3
+          : (in_array($status, ['PENDING', 'PENDING_VOBO'], true) ? 2 : 1);
+
+        if ($priority > $selected_priority) {
+          $selected = $transaction;
+          $selected_priority = $priority;
+        }
       }
     }
+
+    return $selected;
   }
 
   return null;
@@ -776,8 +919,15 @@ function rae_wompi_verify_reserva_payment($reserva) {
     $transaction = rae_wompi_fetch_transaction($reserva->wompi_transaction_id);
   }
 
-  if (!$transaction && !empty($reserva->payment_reference)) {
-    $transaction = rae_wompi_fetch_transaction_by_reference($reserva->payment_reference);
+  if (
+    (!$transaction || strtoupper((string) ($transaction['status'] ?? '')) !== 'APPROVED')
+    && !empty($reserva->payment_reference)
+  ) {
+    $reference_transaction = rae_wompi_fetch_transaction_by_reference($reserva->payment_reference);
+
+    if (is_array($reference_transaction)) {
+      $transaction = $reference_transaction;
+    }
   }
 
   if (!is_array($transaction)) {

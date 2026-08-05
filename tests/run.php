@@ -28,9 +28,14 @@ class RAE_Test_WPDB {
   public $next_get_var = 0;
   public $next_get_row = null;
   public $next_get_results = [];
+  public $next_get_results_queue = [];
   public $next_query_result = 1;
+  public $next_insert_result = 1;
+  public $next_update_result = 1;
   public $last_query = '';
+  public $queries = [];
   public $last_update = null;
+  public $last_insert = null;
 
   public function prepare($query, ...$args) {
     $this->last_query = $query;
@@ -49,17 +54,26 @@ class RAE_Test_WPDB {
 
   public function get_results($query) {
     $this->last_query = $query;
+    if ($this->next_get_results_queue) {
+      return array_shift($this->next_get_results_queue);
+    }
     return $this->next_get_results;
   }
 
   public function query($query) {
     $this->last_query = $query;
+    $this->queries[] = $query;
     return $this->next_query_result;
   }
 
   public function update($table, $data, $where, $formats, $where_formats) {
     $this->last_update = compact('table', 'data', 'where', 'formats', 'where_formats');
-    return 1;
+    return $this->next_update_result;
+  }
+
+  public function insert($table, $data, $formats) {
+    $this->last_insert = compact('table', 'data', 'formats');
+    return $this->next_insert_result;
   }
 }
 
@@ -234,6 +248,7 @@ $base_reservation = (object) [
   'payment_reference' => 'RAE-31-TEST',
   'wompi_transaction_id' => '',
   'payment_amount_cop' => 120000,
+  'payment_retry_until' => null,
   'paid_at' => null,
 ];
 $approved_transaction = [
@@ -310,6 +325,75 @@ rae_test_assert(
   'No se procesó de forma idempotente un evento tardío.'
 );
 rae_test_assert($GLOBALS['wpdb']->last_update === null, 'Un evento tardío degradó un pago aprobado.');
+
+$declined_transaction = $approved_transaction;
+$declined_transaction['id'] = 'declined-attempt-1';
+$declined_transaction['status'] = 'DECLINED';
+$GLOBALS['wpdb']->next_get_var = 0;
+$GLOBALS['wpdb']->next_get_row = clone $base_reservation;
+$GLOBALS['wpdb']->last_update = null;
+rae_test_assert(
+  rae_wompi_update_reserva_from_transaction($declined_transaction),
+  'El primer intento rechazado no abrió la ventana de reintento.'
+);
+rae_test_assert(
+  ($GLOBALS['wpdb']->last_update['data']['estado'] ?? '') === 'pendiente_pago'
+    && ($GLOBALS['wpdb']->last_update['data']['payment_status'] ?? '') === 'retry_available'
+    && !empty($GLOBALS['wpdb']->last_update['data']['payment_retry_until']),
+  'Un intento rechazado liberó la reserva antes de terminar la ventana de reintento.'
+);
+rae_test_assert(
+  ($GLOBALS['wpdb']->last_update['where']['payment_status'] ?? null) === 'pending',
+  'Un evento rechazado no quedó protegido frente a una aprobación concurrente.'
+);
+
+$retry_reservation = clone $base_reservation;
+$retry_reservation->payment_status = 'retry_available';
+$retry_reservation->wompi_transaction_id = $declined_transaction['id'];
+$retry_reservation->payment_retry_until = '2026-08-04 12:03:00';
+$approved_retry = $approved_transaction;
+$approved_retry['id'] = 'approved-attempt-2';
+$GLOBALS['wpdb']->next_get_row = $retry_reservation;
+$GLOBALS['wpdb']->last_update = null;
+rae_test_assert(
+  rae_wompi_update_reserva_from_transaction($approved_retry),
+  'El segundo intento aprobado con otro ID de transacción fue rechazado.'
+);
+rae_test_assert(
+  ($GLOBALS['wpdb']->last_update['data']['estado'] ?? '') === 'confirmada'
+    && ($GLOBALS['wpdb']->last_update['data']['payment_status'] ?? '') === 'approved'
+    && ($GLOBALS['wpdb']->last_update['data']['wompi_transaction_id'] ?? '') === 'approved-attempt-2'
+    && array_key_exists('payment_retry_until', $GLOBALS['wpdb']->last_update['data'])
+    && $GLOBALS['wpdb']->last_update['data']['payment_retry_until'] === null,
+  'El segundo intento aprobado no confirmó correctamente la misma referencia.'
+);
+rae_test_assert(
+  !array_key_exists('payment_status', $GLOBALS['wpdb']->last_update['where']),
+  'La aprobación quedó condicionada a un estado anterior y podría perderse por concurrencia.'
+);
+
+$normalized_retry = rae_wompi_normalize_transaction_response([
+  'data' => [$declined_transaction, $approved_retry],
+], 'RAE-31-TEST');
+rae_test_assert(
+  ($normalized_retry['id'] ?? '') === 'approved-attempt-2',
+  'La consulta por referencia prefirió un intento rechazado sobre el aprobado.'
+);
+
+$due_retry = clone $retry_reservation;
+$due_retry->payment_retry_until = '2026-08-04 12:03:00';
+$GLOBALS['wpdb']->next_get_results_queue = [[$due_retry], []];
+$GLOBALS['wpdb']->queries = [];
+rae_test_assert(
+  rae_wompi_expire_pending_reservations('2026-08-04 12:04:00') === 1,
+  'La reserva no se liberó al finalizar la ventana de reintento.'
+);
+rae_test_assert(
+  count(array_filter($GLOBALS['wpdb']->queries, function ($query) {
+    return strpos($query, 'payment_retry_until = NULL') !== false;
+  })) === 1,
+  'La liberación del reintento no fue una transición atómica.'
+);
 
 if ($failures) {
   foreach ($failures as $failure) {

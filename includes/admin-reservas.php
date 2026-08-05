@@ -789,6 +789,7 @@ function rae_nombre_estado_pago($estado) {
     '' => 'Sin pago',
     'pending' => 'Pendiente',
     'pending_vobo' => 'Pendiente',
+    'retry_available' => 'Reintento disponible',
     'approved' => 'Aprobado',
     'declined' => 'Rechazado',
     'voided' => 'Anulado',

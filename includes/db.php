@@ -8,6 +8,7 @@ class RAE_DB {
     global $wpdb;
 
     $table = $wpdb->prefix . 'reservas_aseo';
+    $attempts_table = $wpdb->prefix . 'reservas_aseo_pagos';
     $charset = $wpdb->get_charset_collate();
 
     $sql = "CREATE TABLE $table (
@@ -29,6 +30,7 @@ class RAE_DB {
       payment_gateway VARCHAR(30) NOT NULL DEFAULT '',
       payment_amount_cop BIGINT UNSIGNED NOT NULL DEFAULT 0,
       payment_response LONGTEXT NULL,
+      payment_retry_until DATETIME NULL,
       paid_at DATETIME NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
@@ -39,6 +41,25 @@ class RAE_DB {
 
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
     dbDelta($sql);
+
+    $attempts_sql = "CREATE TABLE $attempts_table (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      reserva_id BIGINT UNSIGNED NOT NULL,
+      payment_reference VARCHAR(80) NOT NULL,
+      transaction_id VARCHAR(100) NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT '',
+      payment_method VARCHAR(50) NOT NULL DEFAULT '',
+      amount_in_cents BIGINT UNSIGNED NOT NULL DEFAULT 0,
+      currency VARCHAR(10) NOT NULL DEFAULT '',
+      raw_response LONGTEXT NULL,
+      received_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY transaction_id (transaction_id),
+      KEY reserva_id (reserva_id),
+      KEY payment_reference (payment_reference)
+    ) $charset;";
+
+    dbDelta($attempts_sql);
 
     // Versiones anteriores impedían conservar reservas canceladas o rechazadas
     // y volver a utilizar la misma jornada. La exclusión concurrente se maneja

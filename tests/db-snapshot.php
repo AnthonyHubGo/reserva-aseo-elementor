@@ -40,6 +40,7 @@ $username = rae_snapshot_config_value($config, 'DB_USER');
 $password = rae_snapshot_config_value($config, 'DB_PASSWORD');
 $prefix = $prefix_match[1];
 $table = $prefix . 'reservas_aseo';
+$attempts_table = $prefix . 'reservas_aseo_pagos';
 $options_table = $prefix . 'options';
 $connection = new mysqli($host, $username, $password, $database, $port);
 
@@ -51,6 +52,10 @@ if ($connection->connect_errno) {
 $connection->set_charset('utf8mb4');
 $count_result = $connection->query("SELECT COUNT(*) AS total FROM `$table`");
 $count = $count_result ? (int) $count_result->fetch_assoc()['total'] : 0;
+$attempts_count_result = $connection->query("SELECT COUNT(*) AS total FROM `$attempts_table`");
+$attempts_count = $attempts_count_result ? (int) $attempts_count_result->fetch_assoc()['total'] : null;
+$retry_column_result = $connection->query("SHOW COLUMNS FROM `$table` LIKE 'payment_retry_until'");
+$has_retry_column = $retry_column_result && $retry_column_result->num_rows === 1;
 $version_result = $connection->query(
   "SELECT option_value FROM `$options_table` WHERE option_name = 'rae_db_version' LIMIT 1"
 );
@@ -68,11 +73,11 @@ while ($index_result && ($index = $index_result->fetch_assoc())) {
 }
 
 $latest_result = $connection->query(
-  "SELECT id, persona_id, fecha, jornada, estado, payment_status, payment_gateway, payment_amount_cop, payment_reference, wompi_transaction_id FROM `$table` ORDER BY id DESC LIMIT 1"
+  "SELECT id, persona_id, fecha, jornada, estado, payment_status, payment_gateway, payment_amount_cop, payment_reference, wompi_transaction_id, payment_retry_until, created_at FROM `$table` ORDER BY id DESC LIMIT 1"
 );
 $latest = $latest_result ? $latest_result->fetch_assoc() : null;
 $recent_result = $connection->query(
-  "SELECT id, persona_id, fecha, jornada, estado, payment_status, payment_gateway, payment_amount_cop, payment_reference, wompi_transaction_id FROM `$table` ORDER BY id DESC LIMIT 5"
+  "SELECT id, persona_id, fecha, jornada, estado, payment_status, payment_gateway, payment_amount_cop, payment_reference, wompi_transaction_id, payment_retry_until, created_at FROM `$table` ORDER BY id DESC LIMIT 5"
 );
 $recent = [];
 
@@ -83,6 +88,8 @@ while ($recent_result && ($reservation = $recent_result->fetch_assoc())) {
 echo json_encode([
   'db_version' => $version_row['option_value'] ?? '',
   'reservations' => $count,
+  'payment_attempts' => $attempts_count,
+  'has_payment_retry_until' => $has_retry_column,
   'latest_reservation' => $latest,
   'recent_reservations' => $recent,
   'indexes' => $indexes,
